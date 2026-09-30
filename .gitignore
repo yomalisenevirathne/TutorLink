@@ -3,3 +3,7 @@ node_modules/
 dist/
 web-build/
 backend/data.json
+.env
+.env.local
+.env.*.local
+*.log
