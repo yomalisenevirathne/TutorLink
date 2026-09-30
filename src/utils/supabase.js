@@ -2,49 +2,50 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
-// Safe Storage Adapter preventing "Native module is null" error on Web and Expo managed environments
-const customStorageAdapter = {
+// In-Memory Storage Fallback to prevent native module crashes in Expo / Web
+const inMemoryStorage = new Map();
+
+const safeStorageAdapter = {
   getItem: async (key) => {
-    if (Platform.OS === 'web') {
-      try {
-        if (typeof localStorage !== 'undefined') {
-          return localStorage.getItem(key);
-        }
-      } catch (e) {
-        return null;
-      }
-    }
     try {
-      return await AsyncStorage.getItem(key);
-    } catch (e) {
-      return null;
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          return window.localStorage.getItem(key);
+        }
+      }
+      // Check if AsyncStorage is available natively
+      const value = await AsyncStorage.getItem(key);
+      return value;
+    } catch (error) {
+      // Catch native module null error silently and fallback to memory storage
+      return inMemoryStorage.has(key) ? inMemoryStorage.get(key) : null;
     }
   },
   setItem: async (key, value) => {
-    if (Platform.OS === 'web') {
-      try {
-        if (typeof localStorage !== 'undefined') {
-          localStorage.setItem(key, value);
-        }
-      } catch (e) {}
-      return;
-    }
     try {
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem(key, value);
+          return;
+        }
+      }
       await AsyncStorage.setItem(key, value);
-    } catch (e) {}
+    } catch (error) {
+      inMemoryStorage.set(key, value);
+    }
   },
   removeItem: async (key) => {
-    if (Platform.OS === 'web') {
-      try {
-        if (typeof localStorage !== 'undefined') {
-          localStorage.removeItem(key);
-        }
-      } catch (e) {}
-      return;
-    }
     try {
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.removeItem(key);
+          return;
+        }
+      }
       await AsyncStorage.removeItem(key);
-    } catch (e) {}
+    } catch (error) {
+      inMemoryStorage.delete(key);
+    }
   },
 };
 
@@ -56,7 +57,7 @@ export const supabase = createClient(
   supabaseAnonKey,
   {
     auth: {
-      storage: customStorageAdapter,
+      storage: safeStorageAdapter,
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
