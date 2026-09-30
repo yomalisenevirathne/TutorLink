@@ -1,7 +1,11 @@
-// Frontend API client service for TutorLink Scope 3 Backend
+import { supabase } from '../utils/supabase';
+
+// Frontend API client service for TutorLink Scope 3 Backend & Supabase Integration
 const API_BASE_URL = 'http://localhost:5000/api';
 
-// Internal mock state for offline / standalone preview mode
+// Export Supabase client for direct usage across components
+export { supabase };
+
 let mockState = {
   token: 'mock_session_token_123',
   currentUser: {
@@ -34,7 +38,7 @@ let mockState = {
 async function fetchWithFallback(endpoint, options = {}) {
   try {
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 2000); // 2 sec timeout
+    const id = setTimeout(() => controller.abort(), 2000);
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
@@ -52,14 +56,43 @@ async function fetchWithFallback(endpoint, options = {}) {
     }
     return data;
   } catch (err) {
-    console.log(`[API Client] Live endpoint ${endpoint} unavailable, using mock response:`, err.message);
+    console.log(`[API Client] Live REST endpoint ${endpoint} unavailable, using mock/Supabase fallback:`, err.message);
     return null;
   }
 }
 
 export const apiService = {
+  // Supabase Table query helper (e.g. for 'todos', 'profiles', etc.)
+  fetchSupabaseData: async (tableName = 'todos') => {
+    try {
+      const { data, error } = await supabase.from(tableName).select();
+      if (error) {
+        console.log(`[Supabase Query] Error fetching ${tableName}:`, error.message);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.log(`[Supabase Query] Exception fetching ${tableName}:`, err.message);
+      return [];
+    }
+  },
+
   // 1. Send OTP
   sendOtp: async (email) => {
+    // Attempt Supabase OTP send first
+    try {
+      const { error } = await supabase.auth.signInWithOtp({ email });
+      if (!error) {
+        return {
+          success: true,
+          message: `OTP sent via Supabase to ${email}.`,
+          otp: '123456'
+        };
+      }
+    } catch (err) {
+      console.log('[Supabase Auth] OTP error:', err.message);
+    }
+
     const liveResult = await fetchWithFallback('/auth/send-otp', {
       method: 'POST',
       body: JSON.stringify({ email })
@@ -77,6 +110,20 @@ export const apiService = {
 
   // 2. Verify OTP
   verifyOtp: async (email, otp) => {
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token: otp,
+        type: 'email'
+      });
+      if (!error && data?.user) {
+        if (mockState.currentUser) mockState.currentUser.isEmailVerified = true;
+        return { success: true, message: 'Email verified via Supabase!' };
+      }
+    } catch (err) {
+      console.log('[Supabase Auth] Verify OTP error:', err.message);
+    }
+
     const liveResult = await fetchWithFallback('/auth/verify-otp', {
       method: 'POST',
       body: JSON.stringify({ email, otp })
@@ -95,6 +142,24 @@ export const apiService = {
 
   // 3. Register Account
   register: async (registrationData) => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: registrationData.email,
+        password: registrationData.password || 'password123',
+        options: {
+          data: {
+            fullName: registrationData.fullName,
+            role: registrationData.role
+          }
+        }
+      });
+      if (!error && data?.user) {
+        console.log('[Supabase Auth] Registered user in Supabase:', data.user.email);
+      }
+    } catch (err) {
+      console.log('[Supabase Auth] Registration fallback:', err.message);
+    }
+
     const liveResult = await fetchWithFallback('/auth/register', {
       method: 'POST',
       body: JSON.stringify(registrationData)
@@ -132,6 +197,18 @@ export const apiService = {
 
   // 4. Login
   login: async (email, password) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      if (!error && data?.user) {
+        console.log('[Supabase Auth] Logged in via Supabase:', data.user.email);
+      }
+    } catch (err) {
+      console.log('[Supabase Auth] Login fallback:', err.message);
+    }
+
     const liveResult = await fetchWithFallback('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password })
@@ -142,7 +219,6 @@ export const apiService = {
       return liveResult;
     }
 
-    // Default mock behavior
     const isTutor = email.includes('tutor') || !email.includes('student');
     const user = {
       id: isTutor ? 'usr_tutor_1' : 'usr_student_1',
@@ -177,14 +253,12 @@ export const apiService = {
     };
   },
 
-  // 5. Get User Profile
   getProfile: async () => {
     const liveResult = await fetchWithFallback('/profile/me');
     if (liveResult) return liveResult.user;
     return mockState.currentUser;
   },
 
-  // 6. Update Profile
   updateProfile: async (updateData) => {
     const liveResult = await fetchWithFallback('/profile/update', {
       method: 'PUT',
@@ -203,7 +277,6 @@ export const apiService = {
     };
   },
 
-  // 7. Upload Certificate Qualification
   uploadCertificate: async (title, issuingInstitute, certificateUrl) => {
     const liveResult = await fetchWithFallback('/profile/upload-certificate', {
       method: 'POST',
