@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Image } from 'react-native';
 import { apiService } from '../services/api';
+import { pickImageWithPermissions, pickQualificationDocument } from '../utils/mediaPicker';
 
 export default function TutorRegistrationScreen({ onNavigateToVerifyOtp, onRegistrationSuccess, onBack }) {
   const [fullName, setFullName] = useState('');
@@ -10,9 +11,16 @@ export default function TutorRegistrationScreen({ onNavigateToVerifyOtp, onRegis
   const [experienceLevel, setExperienceLevel] = useState('Senior Tutor (4+ years)');
   const [aboutYou, setAboutYou] = useState('');
   const [password, setPassword] = useState('password123');
-  const [certificateTitle, setCertificateTitle] = useState('B.Sc. Special Hons Degree Certificate');
-  const [certificateUploaded, setCertificateUploaded] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(null);
+  const [certificateDocument, setCertificateDocument] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const handlePickPhoto = async () => {
+    const uri = await pickImageWithPermissions();
+    if (uri) {
+      setAvatarUrl(uri);
+    }
+  };
 
   const handleVerifyEmailClick = async () => {
     if (!email) {
@@ -28,8 +36,11 @@ export default function TutorRegistrationScreen({ onNavigateToVerifyOtp, onRegis
   };
 
   const handleUploadCertificate = async () => {
-    setCertificateUploaded(true);
-    Alert.alert('Certificate Attached', `Document "${certificateTitle}" attached successfully. It will be verified upon registration.`);
+    const doc = await pickQualificationDocument();
+    if (doc) {
+      setCertificateDocument(doc);
+      Alert.alert('Certificate Attached 📄', `Document "${doc.name}" attached successfully!`);
+    }
   };
 
   const handleRegister = async () => {
@@ -49,10 +60,12 @@ export default function TutorRegistrationScreen({ onNavigateToVerifyOtp, onRegis
         experienceLevel,
         aboutYou,
         password,
-        certificates: certificateUploaded ? [{
+        avatarUrl,
+        certificates: certificateDocument ? [{
           id: 'cert_' + Date.now(),
-          title: certificateTitle,
-          issuingInstitute: 'University of Colombo',
+          title: certificateDocument.name,
+          certificateUrl: certificateDocument.uri,
+          issuingInstitute: 'Verified Document',
           status: 'Verified',
           uploadedAt: new Date().toISOString().split('T')[0]
         }] : []
@@ -89,11 +102,17 @@ export default function TutorRegistrationScreen({ onNavigateToVerifyOtp, onRegis
       {/* Profile Picture Upload Box */}
       <View style={styles.sectionCard}>
         <Text style={styles.sectionTitle}>Profile Picture</Text>
-        <TouchableOpacity style={styles.uploadPhotoBox} onPress={() => Alert.alert('Photo Picked', 'Profile photo selected successfully.')}>
-          <View style={styles.cameraIconBg}>
-            <Text style={styles.cameraIcon}>📷</Text>
-          </View>
-          <Text style={styles.uploadPhotoText}>Upload Photo</Text>
+        <TouchableOpacity style={styles.uploadPhotoBox} onPress={handlePickPhoto}>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={{ width: 80, height: 80, borderRadius: 40 }} />
+          ) : (
+            <>
+              <View style={styles.cameraIconBg}>
+                <Text style={styles.cameraIcon}>📷</Text>
+              </View>
+              <Text style={styles.uploadPhotoText}>Upload Photo (Camera / Gallery)</Text>
+            </>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -189,12 +208,12 @@ export default function TutorRegistrationScreen({ onNavigateToVerifyOtp, onRegis
         <Text style={styles.sectionTitle}>Qualifications & Certificates</Text>
         <Text style={styles.certDescription}>Upload degree or teaching certificates for profile verification.</Text>
         <TouchableOpacity 
-          style={[styles.certUploadBtn, certificateUploaded && styles.certUploadBtnDone]} 
+          style={[styles.certUploadBtn, certificateDocument && styles.certUploadBtnDone]} 
           onPress={handleUploadCertificate}
         >
-          <Text style={styles.certUploadBtnIcon}>{certificateUploaded ? '✅' : '📄'}</Text>
+          <Text style={styles.certUploadBtnIcon}>{certificateDocument ? '✅' : '📄'}</Text>
           <Text style={styles.certUploadBtnText}>
-            {certificateUploaded ? `Attached: ${certificateTitle}` : 'Upload Certificate / Qualification Document'}
+            {certificateDocument ? `Attached: ${certificateDocument.name}` : 'Upload Certificate / Qualification Document'}
           </Text>
         </TouchableOpacity>
       </View>

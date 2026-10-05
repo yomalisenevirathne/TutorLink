@@ -4,51 +4,11 @@ const path = require('path');
 
 const DB_FILE = path.join(__dirname, 'data.json');
 
-// Initial seed data with example profiles matching design mockups
+// Initial seed data - starts empty for clean app run
 const initialData = {
-  users: [
-    {
-      id: 'usr_student_1',
-      role: 'Student',
-      email: 'dinithi.desilva@univ.ac.lk',
-      password: 'password123',
-      fullName: 'Dinithi de Silva',
-      phoneNumber: '+94 77 123 4567',
-      subjects: ['Mathematics', 'Physics', 'Computer Science'],
-      aboutYou: 'Passionate computer science undergraduate looking for guidance in higher level math and algorithms.',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
-      isEmailVerified: true,
-      privacyEnabled: false,
-      keywords: ['Math', 'Physics', 'Data Structures', 'Python']
-    },
-    {
-      id: 'usr_tutor_1',
-      role: 'Tutor',
-      email: 'dilshan.samarawickrama@univ.ac.lk',
-      password: 'password123',
-      fullName: 'Dilshan Samarawickrama',
-      phoneNumber: '+94 71 987 6543',
-      address: 'Torrous address beat, Luton Road, Titis inst area here',
-      subjects: ['Higher Mathematics', 'Quantum Physics', 'Algorithms'],
-      experienceLevel: 'Senior Tutor (4+ years)',
-      aboutYou: 'Team oriented and dedicated educator specializing in advanced mathematics and applied physics.',
-      avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80',
-      isEmailVerified: true,
-      certificates: [
-        {
-          id: 'cert_1',
-          title: 'B.Sc. Special Hons Degree Certificate',
-          issuingInstitute: 'University of Colombo',
-          status: 'Verified',
-          uploadedAt: '2026-01-15'
-        }
-      ],
-      paymentMethods: [{ type: 'Visa', last4: '4321' }],
-      preferences: { notifications: true, privacy: false }
-    }
-  ],
-  otps: {}, // { email: { code: '123456', expiresAt: timestamp } }
-  sessions: {} // { token: userId }
+  users: [],
+  otps: {},
+  sessions: {}
 };
 
 function loadDatabase() {

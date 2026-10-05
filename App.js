@@ -17,6 +17,11 @@ export default function App() {
   const [verificationEmail, setVerificationEmail] = useState('');
   const [demoOtpCode, setDemoOtpCode] = useState('');
 
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setCurrentScreen('login');
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
@@ -100,6 +105,7 @@ export default function App() {
           <StudentProfileScreen
             user={currentUser}
             onEditProfile={() => setCurrentScreen('studentReg')}
+            onLogout={handleLogout}
           />
         )}
 
@@ -107,6 +113,7 @@ export default function App() {
           <TutorProfileScreen
             user={currentUser}
             onEditProfile={() => setCurrentScreen('tutorReg')}
+            onLogout={handleLogout}
           />
         )}
       </View>

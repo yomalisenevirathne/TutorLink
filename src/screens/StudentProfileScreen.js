@@ -1,13 +1,24 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Switch, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Switch, ScrollView, Alert } from 'react-native';
 
-export default function StudentProfileScreen({ user, onEditProfile, onNavigateTab }) {
+export default function StudentProfileScreen({ user, onEditProfile, onLogout }) {
   const [privacyEnabled, setPrivacyEnabled] = useState(user?.privacyEnabled || false);
   const [activeTab, setActiveTab] = useState('Account');
 
-  const studentName = user?.fullName || 'Dinithi de Silva';
+  const studentName = user?.fullName || 'User Profile';
   const avatarUrl = user?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
-  const keywords = user?.keywords || ['Math', 'Physics', 'Data Structures', 'Python'];
+  const keywords = user?.keywords || ['Mathematics', 'Physics', 'Computer Science'];
+
+  const handleLogoutPress = () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out of your account?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Log Out', style: 'destructive', onPress: () => onLogout && onLogout() }
+      ]
+    );
+  };
 
   return (
     <View style={styles.screen}>
@@ -61,6 +72,12 @@ export default function StudentProfileScreen({ user, onEditProfile, onNavigateTa
             </View>
           </View>
         </View>
+
+        {/* Logout Button */}
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogoutPress}>
+          <Text style={styles.logoutIcon}>🚪</Text>
+          <Text style={styles.logoutBtnText}>Log Out</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       {/* Bottom Navigation Bar */}
@@ -225,6 +242,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#7E22CE',
+  },
+  logoutBtn: {
+    marginHorizontal: 20,
+    marginTop: 20,
+    height: 48,
+    backgroundColor: '#FFF1F2',
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+  },
+  logoutIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  logoutBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#E11D48',
   },
   bottomTabBar: {
     position: 'absolute',

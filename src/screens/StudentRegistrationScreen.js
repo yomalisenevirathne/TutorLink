@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Image } from 'react-native';
 import { apiService } from '../services/api';
+import { pickImageWithPermissions } from '../utils/mediaPicker';
 
 export default function StudentRegistrationScreen({ onRegistrationSuccess, onBack }) {
   const [fullName, setFullName] = useState('');
@@ -9,7 +10,15 @@ export default function StudentRegistrationScreen({ onRegistrationSuccess, onBac
   const [subjects, setSubjects] = useState('');
   const [aboutYou, setAboutYou] = useState('');
   const [password, setPassword] = useState('password123');
+  const [avatarUrl, setAvatarUrl] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const handlePickPhoto = async () => {
+    const uri = await pickImageWithPermissions();
+    if (uri) {
+      setAvatarUrl(uri);
+    }
+  };
 
   const handleRegister = async () => {
     if (!fullName || !email) {
@@ -26,7 +35,8 @@ export default function StudentRegistrationScreen({ onRegistrationSuccess, onBac
         phoneNumber,
         subjects: subjects ? subjects.split(',').map(s => s.trim()) : ['Mathematics', 'Physics'],
         aboutYou,
-        password
+        password,
+        avatarUrl
       };
 
       const res = await apiService.register(payload);
@@ -60,11 +70,17 @@ export default function StudentRegistrationScreen({ onRegistrationSuccess, onBac
       {/* Profile Picture Box */}
       <View style={styles.sectionCard}>
         <Text style={styles.sectionTitle}>Profile Picture</Text>
-        <TouchableOpacity style={styles.uploadPhotoBox} onPress={() => Alert.alert('Photo Picked', 'Student photo selected successfully.')}>
-          <View style={styles.cameraIconBg}>
-            <Text style={styles.cameraIcon}>📷</Text>
-          </View>
-          <Text style={styles.uploadPhotoText}>Upload Photo</Text>
+        <TouchableOpacity style={styles.uploadPhotoBox} onPress={handlePickPhoto}>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={{ width: 80, height: 80, borderRadius: 40 }} />
+          ) : (
+            <>
+              <View style={styles.cameraIconBg}>
+                <Text style={styles.cameraIcon}>📷</Text>
+              </View>
+              <Text style={styles.uploadPhotoText}>Upload Photo (Camera / Gallery)</Text>
+            </>
+          )}
         </TouchableOpacity>
       </View>
 
