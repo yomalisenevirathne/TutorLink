@@ -1,20 +1,45 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Switch, ScrollView, Alert } from 'react-native';
+import { pickQualificationDocument } from '../utils/mediaPicker';
 
-export default function TutorProfileScreen({ user, onEditProfile, onCreateSession }) {
+export default function TutorProfileScreen({ user, onEditProfile, onCreateSession, onLogout }) {
   const [notifications, setNotifications] = useState(user?.preferences?.notifications ?? true);
   const [privacy, setPrivacy] = useState(user?.preferences?.privacy ?? false);
   const [activeTab, setActiveTab] = useState('Account');
 
-  const tutorName = user?.fullName || 'Dilshan Samarawickrama';
-  const email = user?.email || 'placeholder_email@example.com';
-  const phone = user?.phoneNumber || 'placeholder_phone_number';
-  const address = user?.address || 'Torrous address beat, Luton Road, Titis inst area here';
-  const bio = user?.aboutYou || 'Team oriented and dedicated educator specializing in advanced mathematics and applied physics.';
+  const tutorName = user?.fullName || 'Tutor Profile';
+  const email = user?.email || 'N/A';
+  const phone = user?.phoneNumber || 'N/A';
+  const address = user?.address || 'Address not specified';
+  const bio = user?.aboutYou || 'No bio provided.';
   const avatarUrl = user?.avatarUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80';
-  const certificates = user?.certificates || [
-    { id: 'cert_1', title: 'B.Sc. Special Hons Degree Certificate', issuingInstitute: 'University of Colombo', status: 'Verified' }
-  ];
+  const [certificatesList, setCertificatesList] = useState(user?.certificates || []);
+
+  const handleUploadNewCert = async () => {
+    const doc = await pickQualificationDocument();
+    if (doc) {
+      const newCert = {
+        id: 'cert_' + Date.now(),
+        title: doc.name,
+        certificateUrl: doc.uri,
+        issuingInstitute: 'Uploaded Document',
+        status: 'Verified'
+      };
+      setCertificatesList(prev => [...prev, newCert]);
+      Alert.alert('Certificate Attached 📄', `Document "${doc.name}" uploaded successfully.`);
+    }
+  };
+
+  const handleLogoutPress = () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out of your account?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Log Out', style: 'destructive', onPress: () => onLogout && onLogout() }
+      ]
+    );
+  };
 
   return (
     <View style={styles.screen}>
@@ -75,19 +100,28 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
 
         {/* Verified Qualifications / Certificates */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Verified Qualifications</Text>
-          {certificates.map((cert) => (
-            <View key={cert.id} style={styles.certCardRow}>
-              <Text style={styles.certIcon}>🎓</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.certTitleText}>{cert.title}</Text>
-                <Text style={styles.certSubText}>{cert.issuingInstitute || 'Verified Institution'}</Text>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Verified Qualifications</Text>
+            <TouchableOpacity style={styles.linkMethodBtn} onPress={handleUploadNewCert}>
+              <Text style={styles.linkMethodText}>+ Upload Document</Text>
+            </TouchableOpacity>
+          </View>
+          {certificatesList.length === 0 ? (
+            <Text style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic' }}>No certificates uploaded yet.</Text>
+          ) : (
+            certificatesList.map((cert) => (
+              <View key={cert.id || cert.title} style={styles.certCardRow}>
+                <Text style={styles.certIcon}>🎓</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.certTitleText}>{cert.title}</Text>
+                  <Text style={styles.certSubText}>{cert.issuingInstitute || 'Verified Document'}</Text>
+                </View>
+                <View style={styles.statusBadge}>
+                  <Text style={styles.statusBadgeText}>Verified ✅</Text>
+                </View>
               </View>
-              <View style={styles.statusBadge}>
-                <Text style={styles.statusBadgeText}>Verified ✅</Text>
-              </View>
-            </View>
-          ))}
+            ))
+          )}
         </View>
 
         {/* Payment Methods */}
@@ -146,6 +180,12 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
           onPress={() => onCreateSession ? onCreateSession() : Alert.alert('Session', 'Create a Session modal opened.')}
         >
           <Text style={styles.createSessionBtnText}>Create a Session</Text>
+        </TouchableOpacity>
+
+        {/* Logout Button */}
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogoutPress}>
+          <Text style={styles.logoutIcon}>🚪</Text>
+          <Text style={styles.logoutBtnText}>Log Out</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -428,6 +468,27 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  logoutBtn: {
+    marginHorizontal: 16,
+    marginBottom: 20,
+    height: 48,
+    backgroundColor: '#FFF1F2',
+    borderRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+  },
+  logoutIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  logoutBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#E11D48',
   },
   bottomTabBar: {
     position: 'absolute',
