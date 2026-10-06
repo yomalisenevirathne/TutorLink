@@ -127,7 +127,7 @@ export default function ScheduleScreen({ navigation, currentBooking, getCapacity
           <TouchableOpacity style={{ marginRight: 14 }}>
             <Ionicons name="notifications" size={22} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation?.navigate('studentProfile')}>
             <Ionicons name="person-circle" size={26} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -197,15 +197,22 @@ export default function ScheduleScreen({ navigation, currentBooking, getCapacity
         <TouchableOpacity style={styles.continueBtn} onPress={handleContinue}>
           <Text style={styles.continueBtnText}>Continue</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.myBookingsBtn}
+          onPress={() => navigation?.navigate('MyBookingsScreen')}
+        >
+          <Text style={styles.myBookingsBtnText}>Go to My Bookings</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       {/* Bottom Nav */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem}><Ionicons name="home-outline" size={22} color="#1F2937" /><Text style={styles.navLabel}>Home</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}><Ionicons name="calendar" size={22} color="#D48B06" /><Text style={[styles.navLabel, { color: '#D48B06' }]}>Bookings</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('MyBookingsScreen')}><Ionicons name="calendar" size={22} color="#D48B06" /><Text style={[styles.navLabel, { color: '#D48B06' }]}>Bookings</Text></TouchableOpacity>
         <TouchableOpacity style={styles.navItem}><Ionicons name="chatbubble-outline" size={22} color="#1F2937" /><Text style={styles.navLabel}>Messages</Text></TouchableOpacity>
         <TouchableOpacity style={styles.navItem}><Ionicons name="wallet-outline" size={22} color="#1F2937" /><Text style={styles.navLabel}>Payments</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}><Ionicons name="person-outline" size={22} color="#1F2937" /><Text style={styles.navLabel}>Account</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('studentProfile')}><Ionicons name="person-outline" size={22} color="#1F2937" /><Text style={styles.navLabel}>Account</Text></TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -241,6 +248,8 @@ const styles = StyleSheet.create({
   selectedSlotText: { color: '#FFFFFF' },
   continueBtn: { backgroundColor: '#D48B06', borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 22 },
   continueBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  myBookingsBtn: { backgroundColor: '#D48B06', borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 10 },
+  myBookingsBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   bottomNav: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 10, borderTopWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF' },
   navItem: { alignItems: 'center' },
   navLabel: { fontSize: 11, fontWeight: '600', color: '#1F2937', marginTop: 3 },

@@ -65,22 +65,33 @@ export const createBookingInDb = async (bookingData) => {
   }
 };
 
-// 3. Booking එකක් Cancel කිරීම
+const isUuid = (id) =>
+  typeof id === 'string' &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+// 3. Booking එකක් Database එකෙන් Delete / Remove කිරීම
 export const cancelBookingInDb = async (bookingId) => {
   try {
+    // If id is not a database UUID (e.g. local mock booking), treat as successfully handled locally
+    if (!isUuid(bookingId)) {
+      return { success: true };
+    }
+
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/bookings?id=eq.${bookingId}`,
       {
-        method: 'PATCH',
+        method: 'DELETE',
         headers,
-        body: JSON.stringify({ status: 'Cancelled' }),
       }
     );
 
-    if (!res.ok) throw new Error('Failed to cancel');
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(errText || 'Failed to remove booking');
+    }
     return { success: true };
   } catch (error) {
-    console.error('Error cancelling booking:', error?.message);
+    console.warn('Notice removing from Supabase:', error?.message);
     return { success: false, error };
   }
 };

@@ -55,8 +55,9 @@ export default function BookingSummaryScreen({ navigation, currentBooking, group
 
       if (result.success) {
         // App.js එකේ Local State / Capacity එක update කිරීම
+        const savedId = result.data?.[0]?.id || result.data?.id;
         if (onConfirm) {
-          onConfirm({ year, month, date, slot, groupSize, mode, totalFee: total });
+          onConfirm({ id: savedId, year, month, date, slot, groupSize, mode, totalFee: total });
         }
         // Screen 4 (Booking Confirmed Modal) එක open කිරීම
         setIsSuccessModalVisible(true);
@@ -87,7 +88,7 @@ export default function BookingSummaryScreen({ navigation, currentBooking, group
           <TouchableOpacity style={{ marginRight: 14 }}>
             <Ionicons name="notifications" size={22} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation?.navigate('ManageSessionScreen')}>
+          <TouchableOpacity onPress={() => navigation?.navigate('studentProfile')}>
             <Ionicons name="person-circle" size={26} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -221,7 +222,7 @@ export default function BookingSummaryScreen({ navigation, currentBooking, group
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => navigation?.navigate('ManageSessionScreen')}
+          onPress={() => navigation?.navigate('studentProfile')}
         >
           <Ionicons name="person-outline" size={22} color="#1F2937" />
           <Text style={styles.navLabel}>Account</Text>

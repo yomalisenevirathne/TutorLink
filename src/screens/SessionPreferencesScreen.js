@@ -63,7 +63,7 @@ export default function SessionPreferencesScreen({ navigation, currentBooking, g
           <TouchableOpacity style={{ marginRight: 14 }}>
             <Ionicons name="notifications" size={22} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation?.navigate('studentProfile')}>
             <Ionicons name="person-circle" size={26} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -233,11 +233,11 @@ export default function SessionPreferencesScreen({ navigation, currentBooking, g
 
       {/* Bottom Nav */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem}><Ionicons name="home-outline" size={22} color="#1F2937" /><Text style={styles.navLabel}>Home</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}><Ionicons name="calendar" size={22} color="#D48B06" /><Text style={[styles.navLabel, { color: '#D48B06' }]}>Bookings</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('ScheduleScreen')}><Ionicons name="home-outline" size={22} color="#1F2937" /><Text style={styles.navLabel}>Home</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('MyBookingsScreen')}><Ionicons name="calendar" size={22} color="#D48B06" /><Text style={[styles.navLabel, { color: '#D48B06' }]}>Bookings</Text></TouchableOpacity>
         <TouchableOpacity style={styles.navItem}><Ionicons name="chatbubble-outline" size={22} color="#1F2937" /><Text style={styles.navLabel}>Messages</Text></TouchableOpacity>
         <TouchableOpacity style={styles.navItem}><Ionicons name="wallet-outline" size={22} color="#1F2937" /><Text style={styles.navLabel}>Payments</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}><Ionicons name="person-outline" size={22} color="#1F2937" /><Text style={styles.navLabel}>Account</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('studentProfile')}><Ionicons name="person-outline" size={22} color="#1F2937" /><Text style={styles.navLabel}>Account</Text></TouchableOpacity>
       </View>
     </SafeAreaView>
   );

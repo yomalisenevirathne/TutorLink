@@ -14,19 +14,31 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { fetchAllBookings, cancelBookingInDb } from '../utils/supabase';
 
-export default function MyBookingsScreen({ navigation }) {
-  const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming' හෝ 'past'
-  const [bookings, setBookings] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function MyBookingsScreen({
+  navigation,
+  myBookings: propBookings,
+  onCancelBooking,
+  onCompleteBooking,
+}) {
+  const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming' or 'past'
+  const [localBookings, setLocalBookings] = useState([]);
+  const [loading, setLoading] = useState(!propBookings);
 
-  // Supabase Database එකෙන් Bookings load කරගැනීම
+  // Use props if provided, otherwise local state
+  const bookings = propBookings || localBookings;
+
+  // Supabase Database fallback
   const loadBookingsFromDb = async () => {
+    if (propBookings && propBookings.length > 0) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const data = await fetchAllBookings();
-      // 'Cancelled' නොවන, Confirmed bookings පමණක් Upcoming tab එකට ලබාගැනීම
-      const activeBookings = data.filter((item) => item.status !== 'Cancelled');
-      setBookings(activeBookings);
+      if (data && data.length > 0) {
+        setLocalBookings(data);
+      }
     } catch (err) {
       console.log('Error loading bookings:', err);
     } finally {
@@ -35,10 +47,16 @@ export default function MyBookingsScreen({ navigation }) {
   };
 
   useEffect(() => {
-    loadBookingsFromDb();
-  }, []);
+    if (!propBookings) {
+      loadBookingsFromDb();
+    }
+  }, [propBookings]);
 
-  // Real Database Cancel Logic
+  // Dynamic Categorization
+  const upcomingBookings = bookings.filter((item) => item.status === 'Confirmed');
+  const pastBookings = bookings.filter((item) => item.status === 'Completed');
+
+  // Cancel Booking Handler
   const handleCancel = (id, tutor) => {
     Alert.alert(
       'Cancel Booking',
@@ -49,13 +67,34 @@ export default function MyBookingsScreen({ navigation }) {
           text: 'Yes, Cancel',
           style: 'destructive',
           onPress: async () => {
-            const res = await cancelBookingInDb(id);
-            if (res.success) {
-              setBookings((prev) => prev.filter((item) => item.id !== id));
-              Alert.alert('Session Cancelled', 'Your booking has been cancelled in Database.');
-            } else {
-              Alert.alert('Error', 'Could not cancel booking. Try again.');
+            if (onCancelBooking) {
+              onCancelBooking(id);
             }
+            setLocalBookings((prev) => prev.filter((item) => item.id !== id));
+            cancelBookingInDb(id).catch(() => {});
+            Alert.alert('Session Cancelled', 'Your booking has been cancelled.');
+          },
+        },
+      ]
+    );
+  };
+
+  // Mark as Completed Handler (for testing and lifecycle)
+  const handleMarkCompleted = (id, tutor) => {
+    Alert.alert(
+      'Complete Session',
+      `Mark session with ${tutor} as completed? It will move to the Past tab.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Mark Completed',
+          onPress: () => {
+            if (onCompleteBooking) {
+              onCompleteBooking(id);
+            }
+            setLocalBookings((prev) =>
+              prev.map((item) => (item.id === id ? { ...item, status: 'Completed' } : item))
+            );
           },
         },
       ]
@@ -83,7 +122,7 @@ export default function MyBookingsScreen({ navigation }) {
           <TouchableOpacity style={{ marginRight: 14 }}>
             <Ionicons name="notifications" size={22} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation?.navigate('ManageSessionScreen')}>
+          <TouchableOpacity onPress={() => navigation?.navigate('studentProfile')}>
             <Ionicons name="person-circle" size={26} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -96,7 +135,7 @@ export default function MyBookingsScreen({ navigation }) {
           onPress={() => setActiveTab('upcoming')}
         >
           <Text style={[styles.tabText, activeTab === 'upcoming' && styles.activeTabText]}>
-            Upcoming
+            Upcoming ({upcomingBookings.length})
           </Text>
         </TouchableOpacity>
 
@@ -105,7 +144,7 @@ export default function MyBookingsScreen({ navigation }) {
           onPress={() => setActiveTab('past')}
         >
           <Text style={[styles.tabText, activeTab === 'past' && styles.activeTabText]}>
-            Past
+            Past ({pastBookings.length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -118,13 +157,13 @@ export default function MyBookingsScreen({ navigation }) {
       ) : activeTab === 'upcoming' ? (
         /* SCREEN 5: Upcoming Bookings Content */
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {bookings.length === 0 ? (
+          {upcomingBookings.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Ionicons name="calendar-outline" size={48} color="#9CA3AF" />
               <Text style={styles.emptyText}>No upcoming bookings found.</Text>
             </View>
           ) : (
-            bookings.map((item) => (
+            upcomingBookings.map((item) => (
               <View key={item.id} style={styles.bookingCard}>
                 {/* Tutor Profile Header */}
                 <View style={styles.cardHeader}>
@@ -136,7 +175,7 @@ export default function MyBookingsScreen({ navigation }) {
                     <Text style={styles.tutorSubject}>{item.subject || 'Data Structures & Algorithms'}</Text>
                   </View>
                   <View style={styles.confirmedBadge}>
-                    <Text style={styles.confirmedBadgeText}>{item.status || 'Confirmed'}</Text>
+                    <Text style={styles.confirmedBadgeText}>Confirmed</Text>
                   </View>
                 </View>
 
@@ -158,7 +197,7 @@ export default function MyBookingsScreen({ navigation }) {
                   </View>
                 </View>
 
-                {/* Action Buttons: Cancel & Reschedule */}
+                {/* Action Buttons: Cancel, Reschedule, Mark Completed */}
                 <View style={styles.actionRow}>
                   <TouchableOpacity
                     style={styles.cancelBtn}
@@ -174,30 +213,98 @@ export default function MyBookingsScreen({ navigation }) {
                     <Text style={styles.rescheduleBtnText}>Reschedule</Text>
                   </TouchableOpacity>
                 </View>
+
+                {/* Simulation button for quick testing */}
+                <TouchableOpacity
+                  style={styles.completeActionBtn}
+                  onPress={() => handleMarkCompleted(item.id, item.tutor_name || 'Tutor')}
+                >
+                  <Ionicons name="checkmark-circle-outline" size={16} color="#059669" />
+                  <Text style={styles.completeActionText}>Mark as Completed</Text>
+                </TouchableOpacity>
               </View>
             ))
           )}
         </ScrollView>
       ) : (
-        /* SCREEN 6: Past Sessions Empty State */
-        <View style={styles.pastEmptyCenterWrapper}>
-          <View style={styles.pastEmptyCard}>
-            <View style={styles.emptyDotsCircle}>
-              <Ionicons name="ellipsis-horizontal" size={26} color="#059669" />
-            </View>
-            <Text style={styles.emptyCardTitle}>Nothing to see here!</Text>
-            <Text style={styles.emptyCardSubtitle}>
-              You don’t have any past sessions yet. Once you complete a session, it will appear here.
-            </Text>
+        /* SCREEN 6: Past Sessions (Dynamic List OR Figma Empty State) */
+        pastBookings.length > 0 ? (
+          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            {pastBookings.map((item) => (
+              <View key={item.id} style={styles.bookingCard}>
+                {/* Tutor Profile Header */}
+                <View style={styles.cardHeader}>
+                  <View style={styles.avatar}>
+                    <Ionicons name="person" size={24} color="#6A1B9A" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.tutorName}>{item.tutor_name || 'Sarith Samarakoon'}</Text>
+                    <Text style={styles.tutorSubject}>{item.subject || 'Data Structures & Algorithms'}</Text>
+                  </View>
+                  <View style={styles.completedBadge}>
+                    <Text style={styles.completedBadgeText}>Completed</Text>
+                  </View>
+                </View>
 
-            <TouchableOpacity
-              style={styles.backHomeBtn}
-              onPress={() => navigation?.navigate('ScheduleScreen')}
-            >
-              <Text style={styles.backHomeBtnText}>Back to Home</Text>
-            </TouchableOpacity>
+                {/* Details (Date & Venue) */}
+                <View style={styles.cardInfo}>
+                  <View style={styles.infoLine}>
+                    <Ionicons name="calendar-outline" size={15} color="#4B5563" />
+                    <Text style={styles.infoText}>
+                      Mon, Sep {item.date || 10}, {item.year || 2026} • {item.slot || '6:00 PM'}
+                    </Text>
+                  </View>
+                  <View style={[styles.infoLine, { marginTop: 6 }]}>
+                    <Ionicons name="location-outline" size={15} color="#4B5563" />
+                    <Text style={styles.infoText}>
+                      {item.mode === 'physical'
+                        ? 'Physical • SLIIT Lab Room 401'
+                        : 'Online • Zoom Classroom'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Action Buttons: Rate Session & Book Again */}
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={styles.rateBtn}
+                    onPress={() => Alert.alert('Rate Session', `Thank you for rating your session with ${item.tutor_name}! ⭐⭐⭐⭐⭐`)}
+                  >
+                    <Ionicons name="star" size={14} color="#D97706" style={{ marginRight: 4 }} />
+                    <Text style={styles.rateBtnText}>Rate Session</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.rescheduleBtn}
+                    onPress={() => handleReschedule(item)}
+                  >
+                    <Text style={styles.rescheduleBtnText}>Book Again</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        ) : (
+          /* Exact Figma Screen 6 Empty State */
+          <View style={styles.pastEmptyCenterWrapper}>
+            <View style={styles.pastEmptyCard}>
+              <View style={styles.emptyDotsCircle}>
+                <Ionicons name="ellipsis-horizontal" size={26} color="#059669" />
+              </View>
+              <Text style={styles.emptyCardTitle}>Nothing to see here!</Text>
+              <Text style={styles.emptyCardSubtitle}>
+                You don’t have any past sessions yet. Once you complete a session, it will appear here.
+              </Text>
+
+              <TouchableOpacity
+                style={styles.backHomeBtn}
+                onPress={() => navigation?.navigate('ScheduleScreen')}
+              >
+                <Text style={styles.backHomeBtnText}>Back to Home</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        )
       )}
 
       {/* Bottom Navigation */}
@@ -223,7 +330,7 @@ export default function MyBookingsScreen({ navigation }) {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => navigation?.navigate('ManageSessionScreen')}
+          onPress={() => navigation?.navigate('studentProfile')}
         >
           <Ionicons name="person-outline" size={22} color="#1F2937" />
           <Text style={styles.navLabel}>Account</Text>
@@ -309,6 +416,15 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   confirmedBadgeText: { fontSize: 11, fontWeight: '700', color: '#059669' },
+  completedBadge: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  completedBadgeText: { fontSize: 11, fontWeight: '700', color: '#4B5563' },
   cardInfo: {
     backgroundColor: '#F9FAFB',
     borderRadius: 8,
@@ -341,6 +457,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   rescheduleBtnText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
+  rateBtn: {
+    flex: 1,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 8,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rateBtnText: { fontSize: 13, fontWeight: '700', color: '#D97706' },
+  completeActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    paddingVertical: 8,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    gap: 6,
+  },
+  completeActionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#059669',
+  },
 
   // Screen 6 Past Empty State
   pastEmptyCenterWrapper: {
