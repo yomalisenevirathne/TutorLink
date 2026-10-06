@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import ScheduleScreen from './src/screens/ScheduleScreen';
 import SessionPreferencesScreen from './src/screens/SessionPreferencesScreen';
 import BookingSummaryScreen from './src/screens/BookingSummaryScreen';
+import MyBookingsScreen from './src/screens/MyBookingsScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('ScheduleScreen');
@@ -43,7 +44,7 @@ export default function App() {
 
   // REAL BOOKING LOGIC: Pay කළ විට අදාළ Date & Slot එකේ capacity update කිරීම
   const handleConfirmBooking = (bookingData) => {
-    const { year, month, date, slot, groupSize } = bookingData;
+    const { year = 2026, month = 8, date = 15, slot = '6:00 PM', groupSize = 'small' } = bookingData || {};
     const key = `${year}-${month}-${date}-${slot}`;
 
     setSessionCapacities((prev) => {
@@ -56,9 +57,15 @@ export default function App() {
       if (groupSize === 'private') {
         return { ...prev, [key]: { ...current, privateBooked: true } };
       } else if (groupSize === 'small') {
-        return { ...prev, [key]: { ...current, smallBookedCount: Math.min(5, current.smallBookedCount + 1) } };
+        return {
+          ...prev,
+          [key]: { ...current, smallBookedCount: Math.min(5, current.smallBookedCount + 1) },
+        };
       } else if (groupSize === 'large') {
-        return { ...prev, [key]: { ...current, largeBookedCount: Math.min(10, current.largeBookedCount + 1) } };
+        return {
+          ...prev,
+          [key]: { ...current, largeBookedCount: Math.min(10, current.largeBookedCount + 1) },
+        };
       }
       return prev;
     });
@@ -72,7 +79,9 @@ export default function App() {
       setCurrentScreen(screenName);
     },
     goBack: () => {
-      if (currentScreen === 'BookingSummaryScreen') {
+      if (currentScreen === 'MyBookingsScreen') {
+        setCurrentScreen('ScheduleScreen');
+      } else if (currentScreen === 'BookingSummaryScreen') {
         setCurrentScreen('SessionPreferencesScreen');
       } else if (currentScreen === 'SessionPreferencesScreen') {
         setCurrentScreen('ScheduleScreen');
@@ -89,6 +98,7 @@ export default function App() {
           getCapacityForSlot={getCapacityForSlot}
         />
       )}
+
       {currentScreen === 'SessionPreferencesScreen' && (
         <SessionPreferencesScreen
           navigation={navigation}
@@ -96,11 +106,18 @@ export default function App() {
           getCapacityForSlot={getCapacityForSlot}
         />
       )}
+
       {currentScreen === 'BookingSummaryScreen' && (
         <BookingSummaryScreen
           navigation={navigation}
           currentBooking={currentBooking}
           onConfirm={handleConfirmBooking}
+        />
+      )}
+
+      {currentScreen === 'MyBookingsScreen' && (
+        <MyBookingsScreen
+          navigation={navigation}
         />
       )}
     </>

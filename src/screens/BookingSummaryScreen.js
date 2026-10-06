@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,20 @@ import {
   SafeAreaView,
   StatusBar,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { createBookingInDb } from '../utils/supabase';
+import BookingSuccessModal from '../components/BookingSuccessModal';
 
 export default function BookingSummaryScreen({ navigation, currentBooking, groupPlans, onConfirm }) {
-  // App.js එකෙන් කෙළින්ම ලැබෙන Dynamic Data (Fallback values සහිතව)
+  // Screen 4 Confirmed Modal සහ Loading State
+  const [isSuccessModalVisible, setIsSuccessModalVisible] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Dynamic Data (Fallback values සහිතව)
+  const year = currentBooking?.year || 2026;
+  const month = currentBooking?.month ?? 8;
   const date = currentBooking?.date || 15;
   const slot = currentBooking?.slot || '6:00 PM';
   const mode = currentBooking?.mode || 'physical';
@@ -29,22 +38,39 @@ export default function BookingSummaryScreen({ navigation, currentBooking, group
   const platformFee = 50;
   const total = sessionFee + platformFee;
 
-  const handlePay = () => {
-    // App.js එකේ තියෙන confirm function එක call කරයි
-    if (onConfirm) {
-      onConfirm(date, slot);
-    }
+  // Real Database Save & Screen 4 Trigger Function
+  const handlePay = async () => {
+    setIsSubmitting(true);
+    try {
+      // 1. Supabase 'bookings' table එකට Real Data Insert කිරීම
+      const result = await createBookingInDb({
+        year,
+        month,
+        date,
+        slot,
+        mode,
+        groupSize,
+        totalFee: total,
+      });
 
-    Alert.alert(
-      '🎉 Booking Confirmed!',
-      `Your session with Sarith S. has been successfully booked for Mon, Sep ${date} at ${slot}.\n\nTotal Paid: Rs. ${total}\n\nThis slot is now locked on your Schedule!`,
-      [
-        {
-          text: 'Go to Schedule',
-          onPress: () => navigation?.navigate('ScheduleScreen'),
-        },
-      ]
-    );
+      if (result.success) {
+        // App.js එකේ Local State / Capacity එක update කිරීම
+        if (onConfirm) {
+          onConfirm({ year, month, date, slot, groupSize, mode, totalFee: total });
+        }
+        // Screen 4 (Booking Confirmed Modal) එක open කිරීම
+        setIsSuccessModalVisible(true);
+      } else {
+        Alert.alert(
+          'Booking Failed',
+          'Could not save your booking to Supabase. Please check your internet connection and try again.'
+        );
+      }
+    } catch (err) {
+      Alert.alert('Error', err.message || 'An unexpected error occurred.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -61,7 +87,7 @@ export default function BookingSummaryScreen({ navigation, currentBooking, group
           <TouchableOpacity style={{ marginRight: 14 }}>
             <Ionicons name="notifications" size={22} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation?.navigate('ManageSessionScreen')}>
             <Ionicons name="person-circle" size={26} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -88,7 +114,7 @@ export default function BookingSummaryScreen({ navigation, currentBooking, group
         <View style={styles.detailsCard}>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Date</Text>
-            <Text style={styles.detailValue}>Mon, Sep {date}, 2026</Text>
+            <Text style={styles.detailValue}>Mon, Sep {date}, {year}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Time</Text>
@@ -132,7 +158,7 @@ export default function BookingSummaryScreen({ navigation, currentBooking, group
           </View>
         </View>
 
-        {/* Reminder Banner (NFR5) */}
+        {/* Reminder Banner */}
         <View style={styles.reminderBanner}>
           <Ionicons name="checkmark-circle-outline" size={22} color="#10B981" />
           <Text style={styles.reminderText}>
@@ -141,18 +167,47 @@ export default function BookingSummaryScreen({ navigation, currentBooking, group
         </View>
 
         {/* Pay Button */}
-        <TouchableOpacity style={styles.payBtn} onPress={handlePay} activeOpacity={0.85}>
-          <Text style={styles.payBtnText}>Pay</Text>
+        <TouchableOpacity
+          style={[styles.payBtn, isSubmitting && { opacity: 0.7 }]}
+          onPress={handlePay}
+          disabled={isSubmitting}
+          activeOpacity={0.85}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : (
+            <Text style={styles.payBtnText}>Pay</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Bottom Tab Bar Mockup */}
+      {/* Screen 4: Real Booking Confirmed Modal */}
+      <BookingSuccessModal
+        visible={isSuccessModalVisible}
+        bookingDetails={{ date, slot }}
+        onGoToBookings={() => {
+          setIsSuccessModalVisible(false);
+          navigation?.navigate('MyBookingsScreen');
+        }}
+        onBackToHome={() => {
+          setIsSuccessModalVisible(false);
+          navigation?.navigate('ScheduleScreen');
+        }}
+      />
+
+      {/* Bottom Tab Bar */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => navigation?.navigate('ScheduleScreen')}
+        >
           <Ionicons name="home-outline" size={22} color="#1F2937" />
           <Text style={styles.navLabel}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => navigation?.navigate('MyBookingsScreen')}
+        >
           <Ionicons name="calendar" size={22} color="#D48B06" />
           <Text style={[styles.navLabel, { color: '#D48B06' }]}>Bookings</Text>
         </TouchableOpacity>
@@ -164,7 +219,10 @@ export default function BookingSummaryScreen({ navigation, currentBooking, group
           <Ionicons name="wallet-outline" size={22} color="#1F2937" />
           <Text style={styles.navLabel}>Payments</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => navigation?.navigate('ManageSessionScreen')}
+        >
           <Ionicons name="person-outline" size={22} color="#1F2937" />
           <Text style={styles.navLabel}>Account</Text>
         </TouchableOpacity>
