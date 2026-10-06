@@ -1,66 +1,97 @@
-import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient } from '@supabase/supabase-js';
+// src/utils/supabase.js
+// කිසිදු අමතර package එකක් අවශ්‍ය නොවන Standard Native Fetch ක්‍රමය
 
-// In-Memory Storage Fallback to prevent native module crashes in Expo / Web
-const inMemoryStorage = new Map();
+const SUPABASE_URL = 'https://zycqidwaepstggspofvc.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_5bLuMzWMzc4K7puPYHZdeA_Mtm6Cyc4';
 
-const safeStorageAdapter = {
-  getItem: async (key) => {
-    try {
-      if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined' && window.localStorage) {
-          return window.localStorage.getItem(key);
-        }
-      }
-      // Check if AsyncStorage is available natively
-      const value = await AsyncStorage.getItem(key);
-      return value;
-    } catch (error) {
-      // Catch native module null error silently and fallback to memory storage
-      return inMemoryStorage.has(key) ? inMemoryStorage.get(key) : null;
-    }
-  },
-  setItem: async (key, value) => {
-    try {
-      if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined' && window.localStorage) {
-          window.localStorage.setItem(key, value);
-          return;
-        }
-      }
-      await AsyncStorage.setItem(key, value);
-    } catch (error) {
-      inMemoryStorage.set(key, value);
-    }
-  },
-  removeItem: async (key) => {
-    try {
-      if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined' && window.localStorage) {
-          window.localStorage.removeItem(key);
-          return;
-        }
-      }
-      await AsyncStorage.removeItem(key);
-    } catch (error) {
-      inMemoryStorage.delete(key);
-    }
-  },
+const headers = {
+  apikey: SUPABASE_KEY,
+  Authorization: `Bearer ${SUPABASE_KEY}`,
+  'Content-Type': 'application/json',
+  Prefer: 'return=representation',
 };
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://zycqidwaepstggspofvc.supabase.co';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_KEY || 'sb_publishable_5bLuMzWMzc4K7puPYHZdeA_Mtm6Cyc4';
-
-export const supabase = createClient(
-  supabaseUrl,
-  supabaseAnonKey,
-  {
-    auth: {
-      storage: safeStorageAdapter,
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: false,
-    },
+// 1. Supabase එකෙන් Bookings ලබාගැනීම
+export const fetchAllBookings = async () => {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/bookings?select=*&order=created_at.desc`,
+      {
+        method: 'GET',
+        headers,
+      }
+    );
+    if (!res.ok) throw new Error('Failed to fetch bookings');
+    const data = await res.json();
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching bookings:', error?.message);
+    return [];
   }
-);
+};
+
+// 2. අලුත් Booking එකක් Supabase එකට Insert කිරීම
+export const createBookingInDb = async (bookingData) => {
+  try {
+    const body = JSON.stringify({
+      tutor_name: 'Sarith Samarakoon',
+      subject: 'Data Structures & Algorithms',
+      year: bookingData.year || 2026,
+      month: bookingData.month ?? 8,
+      date: bookingData.date,
+      slot: bookingData.slot,
+      mode: bookingData.mode,
+      group_size: bookingData.groupSize,
+      total_fee: bookingData.totalFee || 750,
+      status: 'Confirmed',
+    });
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/bookings`, {
+      method: 'POST',
+      headers,
+      body,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(errText);
+    }
+
+    const data = await res.json();
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error creating booking:', error?.message);
+    return { success: false, error };
+  }
+};
+
+const isUuid = (id) =>
+  typeof id === 'string' &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+// 3. Booking එකක් Database එකෙන් Delete / Remove කිරීම
+export const cancelBookingInDb = async (bookingId) => {
+  try {
+    // If id is not a database UUID (e.g. local mock booking), treat as successfully handled locally
+    if (!isUuid(bookingId)) {
+      return { success: true };
+    }
+
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/bookings?id=eq.${bookingId}`,
+      {
+        method: 'DELETE',
+        headers,
+      }
+    );
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(errText || 'Failed to remove booking');
+    }
+    return { success: true };
+  } catch (error) {
+    console.warn('Notice removing from Supabase:', error?.message);
+    return { success: false, error };
+  }
+};
