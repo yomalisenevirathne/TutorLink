@@ -1,22 +1,33 @@
 import React, { useState } from 'react';
+import { StyleSheet, View, SafeAreaView, StatusBar } from 'react-native';
+
+// --- Rashmika's Auth & Profile Screens (Original / Untouched) ---
+import LoadingScreen from './src/screens/LoadingScreen';
+import LoginScreen from './src/screens/LoginScreen';
+import RegisterSelectionScreen from './src/screens/RegisterSelectionScreen';
+import TutorRegistrationScreen from './src/screens/TutorRegistrationScreen';
+import StudentRegistrationScreen from './src/screens/StudentRegistrationScreen';
+import EmailVerificationScreen from './src/screens/EmailVerificationScreen';
+import StudentProfileScreen from './src/screens/StudentProfileScreen';
+import TutorProfileScreen from './src/screens/TutorProfileScreen';
+
+// --- Yomali's Booking Screens ---
 import ScheduleScreen from './src/screens/ScheduleScreen';
 import SessionPreferencesScreen from './src/screens/SessionPreferencesScreen';
 import BookingSummaryScreen from './src/screens/BookingSummaryScreen';
 import MyBookingsScreen from './src/screens/MyBookingsScreen';
 
 export default function App() {
+  // 💡 TIP: ඔයාගේ Booking part එක විතරක් test කරද්දී 'ScheduleScreen' තියාගන්න.
+  // Full flow එක (Login සිට) බලද්දී මේක 'loading' කරන්න.
   const [currentScreen, setCurrentScreen] = useState('ScheduleScreen');
 
-  // Real-time Slot & Capacity Database (Keyed by "Year-Month-Day-Time")
-  // උදා: "2026-8-15-6:00 PM"
-  const [sessionCapacities, setSessionCapacities] = useState({
-    // Test data for Sep 15 at 6:00 PM (Sample: Small group has 3 students, Large has 10)
-    '2026-8-15-6:00 PM': {
-      privateBooked: false,
-      smallBookedCount: 3, // max 5 -> 2 seats left
-      largeBookedCount: 10, // max 10 -> Fully Booked
-    },
-  });
+  const [currentUser, setCurrentUser] = useState(null);
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [demoOtpCode, setDemoOtpCode] = useState('');
+
+  // Real-time Capacity Database (Yomali's Booking Logic)
+  const [sessionCapacities, setSessionCapacities] = useState({});
 
   const [currentBooking, setCurrentBooking] = useState({
     year: 2026,
@@ -28,21 +39,15 @@ export default function App() {
     groupSize: 'small',
   });
 
-  // Helper: ලබාගත් Date + Time එකට අදාළ capacity ලබාගැනීම
   const getCapacityForSlot = (year, month, date, slot) => {
     const key = `${year}-${month}-${date}-${slot}`;
-    if (!sessionCapacities[key]) {
-      // අලුත් දවසක් නම් සියල්ල Free/Available වේ
-      return {
-        privateBooked: false,
-        smallBookedCount: 0,
-        largeBookedCount: 0,
-      };
-    }
-    return sessionCapacities[key];
+    return sessionCapacities[key] || {
+      privateBooked: false,
+      smallBookedCount: 0,
+      largeBookedCount: 0,
+    };
   };
 
-  // REAL BOOKING LOGIC: Pay කළ විට අදාළ Date & Slot එකේ capacity update කිරීම
   const handleConfirmBooking = (bookingData) => {
     const { year = 2026, month = 8, date = 15, slot = '6:00 PM', groupSize = 'small' } = bookingData || {};
     const key = `${year}-${month}-${date}-${slot}`;
@@ -71,6 +76,12 @@ export default function App() {
     });
   };
 
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setCurrentScreen('login');
+  };
+
+  // Global Navigation Controller
   const navigation = {
     navigate: (screenName, params = {}) => {
       if (params) {
@@ -90,36 +101,137 @@ export default function App() {
   };
 
   return (
-    <>
-      {currentScreen === 'ScheduleScreen' && (
-        <ScheduleScreen
-          navigation={navigation}
-          currentBooking={currentBooking}
-          getCapacityForSlot={getCapacityForSlot}
-        />
-      )}
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {currentScreen === 'SessionPreferencesScreen' && (
-        <SessionPreferencesScreen
-          navigation={navigation}
-          currentBooking={currentBooking}
-          getCapacityForSlot={getCapacityForSlot}
-        />
-      )}
+      <View style={styles.content}>
+        {/* ================= 1. RASHMIKA'S FLOW (UNTOUCHED) ================= */}
+        {currentScreen === 'loading' && (
+          <LoadingScreen onFinishLoading={() => setCurrentScreen('login')} />
+        )}
 
-      {currentScreen === 'BookingSummaryScreen' && (
-        <BookingSummaryScreen
-          navigation={navigation}
-          currentBooking={currentBooking}
-          onConfirm={handleConfirmBooking}
-        />
-      )}
+        {currentScreen === 'login' && (
+          <LoginScreen
+            onLoginSuccess={(user) => {
+              setCurrentUser(user);
+              if (user.role === 'Tutor') {
+                setCurrentScreen('tutorProfile');
+              } else {
+                setCurrentScreen('studentProfile');
+              }
+            }}
+            onNavigateToRegister={() => setCurrentScreen('selection')}
+          />
+        )}
 
-      {currentScreen === 'MyBookingsScreen' && (
-        <MyBookingsScreen
-          navigation={navigation}
-        />
-      )}
-    </>
+        {currentScreen === 'selection' && (
+          <RegisterSelectionScreen
+            onSelectRole={(role) => {
+              if (role === 'Tutor') {
+                setCurrentScreen('tutorReg');
+              } else {
+                setCurrentScreen('studentReg');
+              }
+            }}
+            onBackToLogin={() => setCurrentScreen('login')}
+          />
+        )}
+
+        {currentScreen === 'tutorReg' && (
+          <TutorRegistrationScreen
+            onNavigateToVerifyOtp={(email, otp) => {
+              setVerificationEmail(email);
+              setDemoOtpCode(otp);
+              setCurrentScreen('verifyOtp');
+            }}
+            onRegistrationSuccess={(user) => {
+              setCurrentUser(user);
+              setCurrentScreen('tutorProfile');
+            }}
+            onBack={() => setCurrentScreen('selection')}
+          />
+        )}
+
+        {currentScreen === 'studentReg' && (
+          <StudentRegistrationScreen
+            onRegistrationSuccess={(user) => {
+              setCurrentUser(user);
+              setCurrentScreen('studentProfile');
+            }}
+            onBack={() => setCurrentScreen('selection')}
+          />
+        )}
+
+        {currentScreen === 'verifyOtp' && (
+          <EmailVerificationScreen
+            email={verificationEmail}
+            demoOtp={demoOtpCode}
+            onVerificationSuccess={() => {
+              if (currentUser?.role === 'Tutor') {
+                setCurrentScreen('tutorProfile');
+              } else {
+                setCurrentScreen('studentProfile');
+              }
+            }}
+            onBack={() => setCurrentScreen('login')}
+          />
+        )}
+
+        {currentScreen === 'studentProfile' && (
+          <StudentProfileScreen
+            user={currentUser}
+            onEditProfile={() => setCurrentScreen('studentReg')}
+            onLogout={handleLogout}
+          />
+        )}
+
+        {currentScreen === 'tutorProfile' && (
+          <TutorProfileScreen
+            user={currentUser}
+            onEditProfile={() => setCurrentScreen('tutorReg')}
+            onLogout={handleLogout}
+          />
+        )}
+
+        {/* ================= 2. YOMALI'S BOOKING FLOW ================= */}
+        {currentScreen === 'ScheduleScreen' && (
+          <ScheduleScreen
+            navigation={navigation}
+            currentBooking={currentBooking}
+            getCapacityForSlot={getCapacityForSlot}
+          />
+        )}
+
+        {currentScreen === 'SessionPreferencesScreen' && (
+          <SessionPreferencesScreen
+            navigation={navigation}
+            currentBooking={currentBooking}
+            getCapacityForSlot={getCapacityForSlot}
+          />
+        )}
+
+        {currentScreen === 'BookingSummaryScreen' && (
+          <BookingSummaryScreen
+            navigation={navigation}
+            currentBooking={currentBooking}
+            onConfirm={handleConfirmBooking}
+          />
+        )}
+
+        {currentScreen === 'MyBookingsScreen' && (
+          <MyBookingsScreen navigation={navigation} />
+        )}
+      </View>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  content: {
+    flex: 1,
+  },
+});
