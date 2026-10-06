@@ -87,7 +87,7 @@ export default function EmailVerificationScreen({ email = 'user@univ.ac.lk', dem
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.resendBtn} onPress={handleResendOtp}>
-          <Text style={styles.resendBtnText}>Didn't receive code? Resend OTP</Text>
+          <Text style={styles.resendBtnText}>{"Didn't receive code? Resend OTP"}</Text>
         </TouchableOpacity>
 
         {onBack && (

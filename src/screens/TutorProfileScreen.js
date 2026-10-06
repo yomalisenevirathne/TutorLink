@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Switch, ScrollView, Alert } from 'react-native';
 import { pickQualificationDocument } from '../utils/mediaPicker';
 
-export default function TutorProfileScreen({ user, onEditProfile, onCreateSession, onLogout }) {
+export default function TutorProfileScreen({ user, onEditProfile, onCreateSession, onLogout, onNavigateToPayments }) {
   const [notifications, setNotifications] = useState(user?.preferences?.notifications ?? true);
   const [privacy, setPrivacy] = useState(user?.preferences?.privacy ?? false);
   const [activeTab, setActiveTab] = useState('Account');
@@ -143,7 +143,7 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
               <Text style={styles.smallPillBtnText}>Feedback</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.smallPillBtn} onPress={() => Alert.alert('Payments', 'Payments history section')}>
+            <TouchableOpacity style={styles.smallPillBtn} onPress={onNavigateToPayments}>
               <Text style={styles.smallPillBtnText}>Payments</Text>
             </TouchableOpacity>
           </View>
@@ -206,7 +206,7 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
           <Text style={[styles.tabLabel, activeTab === 'Messages' && styles.tabLabelActive]}>Messages</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('Payments')}>
+        <TouchableOpacity style={styles.tabItem} onPress={onNavigateToPayments} accessibilityRole="button" accessibilityLabel="Payments">
           <Text style={styles.tabIcon}>💳</Text>
           <Text style={[styles.tabLabel, activeTab === 'Payments' && styles.tabLabelActive]}>Payments</Text>
         </TouchableOpacity>
