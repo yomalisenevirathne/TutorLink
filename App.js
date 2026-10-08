@@ -18,6 +18,8 @@ import PaymentScreen from './src/screens/PaymentScreen';
 import AddCardScreen from './src/screens/AddCardScreen';
 import PaymentProcessingScreen from './src/screens/PaymentProcessingScreen';
 import PaymentSuccessScreen from './src/screens/PaymentSuccessScreen';
+import ManagePaymentsScreen from './src/screens/ManagePaymentsScreen';
+import EditCardScreen from './src/screens/EditCardScreen';
 import { createDemoPaymentReceipt } from './src/data/paymentReceipt';
 import { apiService } from './src/services/api';
 
@@ -30,7 +32,7 @@ import MyBookingsScreen from './src/screens/MyBookingsScreen';
 const screenPath = (screen) => ({ pathname: '/[page]', params: { page: screen } });
 const publicScreens = ['loading', 'login', 'selection', 'tutorReg', 'studentReg', 'verifyOtp'];
 const bookingScreens = ['ScheduleScreen', 'SessionPreferencesScreen', 'BookingSummaryScreen', 'MyBookingsScreen'];
-const allScreens = [...publicScreens, ...bookingScreens, 'studentProfile', 'tutorProfile', 'paymentHistory', 'payment', 'addCard', 'paymentProcessing', 'paymentSuccess'];
+const allScreens = [...publicScreens, ...bookingScreens, 'studentProfile', 'tutorProfile', 'paymentHistory', 'payment', 'addCard', 'editCard', 'paymentProcessing', 'paymentSuccess', 'managePayments'];
 
 export default function App() {
   const { page = 'loading' } = useLocalSearchParams();
@@ -46,7 +48,10 @@ export default function App() {
   const isAddCardScreen = currentScreen === 'addCard';
   const isPaymentProcessing = currentScreen === 'paymentProcessing';
   const isPaymentSuccess = currentScreen === 'paymentSuccess';
-  const isPaymentArea = isPaymentScreen || isAddCardScreen || isPaymentHistory || isPaymentProcessing || isPaymentSuccess;
+  const isManagePayments = currentScreen === 'managePayments';
+  const isEditCardScreen = currentScreen === 'editCard';
+  const isPaymentArea = isPaymentScreen || isAddCardScreen || isPaymentHistory || isPaymentProcessing || isPaymentSuccess || isManagePayments || isEditCardScreen;
+  const cardsChanged = () => setCurrentBooking((previous) => ({ ...previous, cardsVersion: (previous.cardsVersion || 0) + 1 }));
   const paymentReceipt = currentBooking.paymentReceipt;
   const hasPaymentReceipt = paymentReceipt?.isDemo === true && paymentReceipt.ownerId === currentUser?.id;
   const finishPaymentDemo = useCallback((saved) => {
@@ -95,6 +100,8 @@ export default function App() {
   };
   if (!allScreens.includes(currentScreen)) return <Redirect href={screenPath(currentUser ? accountScreen : 'login')} />;
   if (!currentUser && !publicScreens.includes(currentScreen)) return <Redirect href={screenPath('login')} />;
+  if (isEditCardScreen && (!currentBooking.editingCardId || currentBooking.editingCardOwner !== currentUser.id))
+    return <Redirect href={screenPath('paymentHistory')} />;
   if ((isPaymentProcessing || isPaymentSuccess) && !hasPaymentReceipt) return <Redirect href={screenPath(accountScreen)} />;
   if (isPaymentSuccess && !paymentReceipt.paymentId) return <Redirect href={screenPath('paymentProcessing')} />;
 
@@ -194,15 +201,24 @@ export default function App() {
             />
           )}
 
-        {isPaymentHistory && <PaymentHistoryScreen key={currentUser?.id} onBackToAccount={openAccount} userId={currentUser?.id} isDemo={!!currentUser?.isDemo} />}
+        {isPaymentHistory && <PaymentHistoryScreen key={currentUser?.id} onBackToAccount={openAccount} userId={currentUser?.id} isDemo={!!currentUser?.isDemo}
+          cardsVersion={currentBooking.cardsVersion || 0} onManagePayments={() => navigation.navigate('managePayments')}
+          onAddCard={() => navigation.navigate('addCard', { addCardReturnTo: 'paymentHistory' })} />}
+        {isManagePayments && <ManagePaymentsScreen userId={currentUser.id} isDemo={!!currentUser.isDemo} cardsVersion={currentBooking.cardsVersion || 0}
+          onCardsChanged={cardsChanged} onEditCard={(card) => navigation.navigate('editCard', { editingCardId: card.id, editingCardOwner: currentUser.id })}
+          onBack={() => navigation.goBack()} onAddCard={() => navigation.navigate('addCard', { addCardReturnTo: 'managePayments' })} />}
+        {isEditCardScreen && <EditCardScreen key={currentBooking.editingCardId} userId={currentUser.id} isDemo={!!currentUser.isDemo}
+          cardId={currentBooking.editingCardId} onBack={() => navigation.goBack()}
+          onSaved={() => { cardsChanged(); navigation.goBack(); }} />}
         {isPaymentScreen && <PaymentScreen key={currentUser.id} booking={currentBooking.checkout} userId={currentUser.id} isDemo={!!currentUser.isDemo}
-          cardsVersion={currentBooking.cardsVersion || 0} onBack={() => navigation.goBack()} onAddCard={() => navigation.navigate('addCard')}
+          cardsVersion={currentBooking.cardsVersion || 0} onBack={() => navigation.goBack()} onAddCard={() => navigation.navigate('addCard', { addCardReturnTo: 'payment' })}
           onPay={(card) => navigation.navigate('paymentProcessing', {
             paymentReceipt: createDemoPaymentReceipt(currentBooking.checkout, card, currentUser.id),
           })} />}
         {isPaymentProcessing && <PaymentProcessingScreen receipt={paymentReceipt} isDemo={!!currentUser.isDemo} onComplete={finishPaymentDemo} onBack={() => navigation.goBack()} />}
         {isPaymentSuccess && <PaymentSuccessScreen receipt={paymentReceipt} onDone={finishPaymentFlow} />}
         {isAddCardScreen && <AddCardScreen userId={currentUser.id} isDemo={!!currentUser.isDemo} onBack={() => navigation.goBack()}
+          backLabel={currentBooking.addCardReturnTo === 'paymentHistory' ? 'Back to payment history' : currentBooking.addCardReturnTo === 'managePayments' ? 'Back to manage payments' : 'Back to payment'}
           onSaved={() => {
             setCurrentBooking((previous) => ({ ...previous, cardsVersion: (previous.cardsVersion || 0) + 1 }));
             navigation.goBack();

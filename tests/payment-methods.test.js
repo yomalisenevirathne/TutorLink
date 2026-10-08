@@ -35,7 +35,11 @@ function cardService({ rows = [row], error = null, authId = userId, insertResult
       const query = {
         select(columns) { request.columns = columns; return query; },
         insert(value) { request.insert = value; return query; },
-        single() { return Promise.resolve({ data: error ? null : insertResult || { ...request.insert, id: 'persisted-card', is_default: false }, error }); },
+        update(value) { request.update = value; return query; },
+        delete() { request.delete = true; return query; },
+        single() { return Promise.resolve({ data: error ? null : insertResult || (request.insert
+          ? { ...request.insert, id: 'persisted-card', is_default: false }
+          : { ...rows[0], ...request.update }), error }); },
         eq(column, value) { request.filters.push([column, value]); return query; },
         order() { return query; },
         abortSignal() { return query; },
@@ -61,7 +65,8 @@ function cardService({ rows = [row], error = null, authId = userId, insertResult
     '../utils/supabase': { supabase },
     '../utils/paymentDemoClient': { getPaymentDemoClient: () => demoClient },
   });
-  const methods = loadService('paymentMethods.js', { './paymentIdentity': identity });
+  const cardForm = loadService('../data/cardForm.js', {});
+  const methods = loadService('paymentMethods.js', { './paymentIdentity': identity, '../data/cardForm': cardForm });
   return { ...methods, ...identity, requests, stats };
 }
 
@@ -193,4 +198,62 @@ test('invalid card metadata cannot create an anonymous user', async () => {
   await assert.rejects(service.savePaymentMethod('demo_fake-id', { ...metadata, last4: 'full-card-number' }, { isDemo: true }), /Check the card details/);
   assert.equal(service.stats.anonymousSignIns, 0);
   assert.equal(service.requests.length, 0);
+});
+
+test('card details load only the verified owner and chosen card', async () => {
+  const service = cardService({ rows: [{ ...row, cardholder_name: 'Test Student' }] });
+  assert.equal((await service.getPaymentMethodDetails(userId, row.id)).cardholderName, 'Test Student');
+  assert.deepEqual(service.requests[0].filters, [['id', row.id], ['user_id', userId]]);
+  await assert.rejects(cardService({ rows: [{ ...row, user_id: 'another-user' }] }).getPaymentMethodDetails(userId, row.id), /could not be verified/);
+});
+
+test('editing saves only name and expiry and confirms the returned database changes', async () => {
+  const service = cardService();
+  const saved = await service.updatePaymentMethod(userId, row.id, {
+    ...metadata, user_id: 'another-user', number: '4111111111111111', cvv: '123',
+  });
+  assert.equal(saved.expiry, '12/30');
+  assert.equal(saved.cardholderName, 'Test Student');
+  assert.deepEqual(service.requests[0].update, { exp_month: 12, exp_year: 2030, cardholder_name: 'Test Student' });
+  assert.deepEqual(service.requests[0].filters, [['id', row.id], ['user_id', userId]]);
+  await assert.rejects(cardService({ insertResult: row }).updatePaymentMethod(userId, row.id, metadata), /could not be confirmed/);
+});
+
+test('invalid or denied edits never report success', async () => {
+  const invalid = cardService();
+  await assert.rejects(invalid.updatePaymentMethod(userId, row.id, { ...metadata, exp_month: 13 }), /expiry/);
+  assert.equal(invalid.requests.length, 0);
+  await assert.rejects(cardService({ error: { code: '42501' } }).updatePaymentMethod(userId, row.id, metadata), { code: 'CARD_MANAGEMENT_UNAVAILABLE' });
+  await assert.rejects(cardService({ insertResult: { ...row, ...metadata, user_id: 'another-user' } }).updatePaymentMethod(userId, row.id, metadata), /could not be verified/);
+});
+
+test('deleting filters by card and owner and requires a confirmed single removed record', async () => {
+  const service = cardService();
+  assert.deepEqual(await service.deletePaymentMethod(userId, row.id), { id: row.id });
+  assert.equal(service.requests[0].delete, true);
+  assert.deepEqual(service.requests[0].filters, [['id', row.id], ['user_id', userId]]);
+  for (const rows of [[], [{ ...row, user_id: 'another-user' }], [row, row]]) {
+    await assert.rejects(cardService({ rows }).deletePaymentMethod(userId, row.id), /could not be confirmed as removed/);
+  }
+  await assert.rejects(cardService({ error: { code: '42501' } }).deletePaymentMethod(userId, row.id), { code: 'CARD_MANAGEMENT_UNAVAILABLE' });
+});
+
+test('editing and deleting cannot act under a missing or mismatched login', async () => {
+  for (const authId of [null, 'another-user']) {
+    const service = cardService({ authId });
+    await assert.rejects(service.updatePaymentMethod(userId, row.id, metadata), { code: 'AUTH_REQUIRED' });
+    await assert.rejects(service.deletePaymentMethod(userId, row.id), { code: 'AUTH_REQUIRED' });
+    assert.equal(service.requests.length, 0);
+  }
+});
+
+test('demo deletion reuses the verified anonymous owner and never creates a new identity', async () => {
+  const fresh = cardService();
+  await assert.rejects(fresh.deletePaymentMethod('demo_fake-id', row.id, { isDemo: true }), { code: 'AUTH_REQUIRED' });
+  assert.equal(fresh.stats.anonymousSignIns, 0);
+  assert.equal(fresh.requests.length, 0);
+  const restored = cardService({ demoUser: { id: userId, is_anonymous: true } });
+  await restored.deletePaymentMethod('demo_fake-id', row.id, { isDemo: true });
+  assert.deepEqual(restored.requests[0].filters, [['id', row.id], ['user_id', userId]]);
+  assert.equal(restored.stats.anonymousSignIns, 0);
 });

@@ -5,6 +5,7 @@ import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatPaymentAmount, formatPaymentDate, getPaymentSections } from '../data/paymentHistory';
 import { getCombinedPaymentHistory, paymentHistoryErrorMessage } from '../services/payments';
+import PaymentSettingsDrawer from '../components/PaymentSettingsDrawer';
 
 const paymentColors = {
   Paid: { text: '#22C55E', border: '#E5F9EE' },
@@ -51,7 +52,7 @@ function PaymentCard({ payment }) {
   );
 }
 
-export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo = false }) {
+export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo = false, cardsVersion = 0, onManagePayments, onAddCard }) {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -61,6 +62,7 @@ export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo =
   const [status, setStatus] = useState('All');
   const [filterVisible, setFilterVisible] = useState(false);
   const [draftStatus, setDraftStatus] = useState('All');
+  const [settingsVisible, setSettingsVisible] = useState(false);
   const sections = useMemo(() => getPaymentSections(payments, search, status), [payments, search, status]);
   const hasFilters = status !== 'All';
   const isHistoryEmpty = !loading && !refreshing && !loadError && payments.length === 0 && !hasFilters && !search;
@@ -99,6 +101,11 @@ export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo =
     return () => request.current.controller?.abort();
   }, [fetchPayments]));
 
+  useFocusEffect(useCallback(() => () => {
+    setSettingsVisible(false);
+    setFilterVisible(false);
+  }, []));
+
   useFocusEffect(useCallback(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       onBackToAccount();
@@ -124,7 +131,11 @@ export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo =
         <TouchableOpacity onPress={onBackToAccount} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back to account">
           <Feather name="arrow-left" size={23} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={styles.title} accessibilityRole="header">Payment History</Text>
+        <Text style={styles.title} accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Payment History</Text>
+        <TouchableOpacity style={styles.settingsButton} onPress={() => { setFilterVisible(false); setSettingsVisible(true); }}
+          accessibilityRole="button" accessibilityLabel="Payment settings" accessibilityState={{ expanded: settingsVisible }}>
+          <Feather name="settings" size={23} color="#FFFFFF" />
+        </TouchableOpacity>
       </View>
 
       {!isHistoryEmpty && (
@@ -251,6 +262,11 @@ export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo =
         </View>
       </SafeAreaView>
 
+      {settingsVisible && <PaymentSettingsDrawer userId={userId} isDemo={isDemo} cardsVersion={cardsVersion}
+        onClose={() => setSettingsVisible(false)}
+        onManagePayments={() => { setSettingsVisible(false); onManagePayments(); }}
+        onAddCard={() => { setSettingsVisible(false); onAddCard(); }} />}
+
       <Modal visible={filterVisible} transparent animationType="fade" onRequestClose={() => setFilterVisible(false)}>
         <View style={styles.modalOverlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setFilterVisible(false)} accessibilityRole="button" accessibilityLabel="Close payment filters" />
@@ -288,7 +304,8 @@ const styles = StyleSheet.create({
   tabLabel: { fontSize: 10, color: '#64748B', fontWeight: '500' },
   tabLabelActive: { color: '#7C3AED', fontWeight: '700' },
   header: { minHeight: 70, backgroundColor: '#7100FF', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, gap: 12 },
-  title: { color: '#FFFFFF', fontSize: 23, fontWeight: '700' },
+  title: { flex: 1, color: '#FFFFFF', fontSize: 21, fontWeight: '700' },
+  settingsButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 26, marginTop: 18, marginBottom: 4 },
   searchBox: { flex: 1, minHeight: 38, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 11, borderWidth: 1, borderColor: '#9454D3', borderRadius: 3, gap: 10 },
   searchInput: { flex: 1, minWidth: 0, paddingVertical: 6, fontSize: 14, color: '#222222' },

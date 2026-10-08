@@ -1,4 +1,5 @@
 import { getPaymentIdentity } from './paymentIdentity';
+import { getCardUpdateMetadata } from '../data/cardForm';
 
 function checkCancelled(signal) {
   if (signal?.aborted) {
@@ -83,4 +84,76 @@ export function savedCardsErrorMessage(error) {
   if (error.code === 'AUTH_REQUIRED' || error.status === 401 || error.name === 'AuthSessionMissingError')
     return 'Please sign in again to view your saved cards.';
   return "We couldn't load your saved cards. Please try again.";
+}
+
+const detailsColumns = 'id, user_id, brand, last4, exp_month, exp_year, cardholder_name';
+
+async function cardIdentity(userId, cardId, isDemo) {
+  if (!cardId || typeof cardId !== 'string') throw new Error('Choose a saved card first.');
+  const identity = await getPaymentIdentity(userId, { isDemo });
+  if (!identity) {
+    const required = new Error('Please sign in again to manage your saved cards.');
+    required.code = 'AUTH_REQUIRED';
+    throw required;
+  }
+  return identity;
+}
+
+function cardManagementError(error) {
+  if (['42501', 'PGRST205', '42P01', '42703', 'PGRST204'].includes(error?.code)) {
+    const unavailable = new Error('Card editing or removal is not enabled yet. Please complete the card-management setup.');
+    unavailable.code = 'CARD_MANAGEMENT_UNAVAILABLE';
+    return unavailable;
+  }
+  return new Error('Your card could not be changed. Please refresh and try again.');
+}
+
+function cardDetails(record, ownerId, cardId) {
+  if (!record || record.id !== cardId || record.user_id !== ownerId
+    || !['Visa', 'Mastercard', 'American Express'].includes(record.brand) || !/^\d{4}$/.test(record.last4)
+    || !Number.isInteger(record.exp_month) || record.exp_month < 1 || record.exp_month > 12
+    || !Number.isInteger(record.exp_year) || record.exp_year < 2000 || record.exp_year > 9999) {
+    throw new Error('Your saved card could not be verified. Please refresh and try again.');
+  }
+  return { id: record.id, brand: record.brand, last4: record.last4,
+    expiry: `${String(record.exp_month).padStart(2, '0')}/${String(record.exp_year).slice(-2)}`,
+    cardholderName: record.cardholder_name || '' };
+}
+
+export async function getPaymentMethodDetails(userId, cardId, { isDemo = false, signal } = {}) {
+  checkCancelled(signal);
+  const { client, userId: ownerId } = await cardIdentity(userId, cardId, isDemo);
+  checkCancelled(signal);
+  let query = client.from('payment_methods').select(detailsColumns).eq('id', cardId).eq('user_id', ownerId);
+  if (signal) query = query.abortSignal(signal);
+  const { data, error } = await query.single();
+  checkCancelled(signal);
+  if (error) throw cardManagementError(error);
+  return cardDetails(data, ownerId, cardId);
+}
+
+export async function updatePaymentMethod(userId, cardId, metadata, { isDemo = false } = {}) {
+  const changes = getCardUpdateMetadata({
+    name: metadata.cardholder_name,
+    expiry: `${String(metadata.exp_month).padStart(2, '0')}/${metadata.exp_year}`,
+  });
+  const { client, userId: ownerId } = await cardIdentity(userId, cardId, isDemo);
+  // The original card number/brand/owner are immutable; edit only name and expiry.
+  const { data, error } = await client.from('payment_methods').update(changes)
+    .eq('id', cardId).eq('user_id', ownerId).select(detailsColumns).single();
+  if (error) throw cardManagementError(error);
+  const saved = cardDetails(data, ownerId, cardId);
+  if (data.cardholder_name !== changes.cardholder_name || data.exp_month !== changes.exp_month || data.exp_year !== changes.exp_year)
+    throw new Error('Your card changes could not be confirmed as saved. Please try again.');
+  return saved;
+}
+
+export async function deletePaymentMethod(userId, cardId, { isDemo = false } = {}) {
+  const { client, userId: ownerId } = await cardIdentity(userId, cardId, isDemo);
+  const { data, error } = await client.from('payment_methods').delete()
+    .eq('id', cardId).eq('user_id', ownerId).select('id, user_id');
+  if (error) throw cardManagementError(error);
+  if (!Array.isArray(data) || data.length !== 1 || data[0].id !== cardId || data[0].user_id !== ownerId)
+    throw new Error('Your card could not be confirmed as removed. Please refresh and try again.');
+  return { id: cardId };
 }

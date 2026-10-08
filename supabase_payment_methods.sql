@@ -1,4 +1,6 @@
--- Run in the project's Supabase SQL Editor to enable prototype card metadata saves.
+-- Saved cards and card management use the existing public.payment_methods table.
+-- Run in the same project's SQL Editor to update its read/save/edit/remove permissions.
+-- CREATE TABLE IF NOT EXISTS reuses the existing table and preserves its card rows.
 -- No sample cards are inserted. This stores display details, not payment tokens.
 -- A payment provider is required before these cards can be used to charge money.
 -- Full card numbers and CVV are never submitted or stored in this table.
@@ -36,11 +38,23 @@ CREATE POLICY "Users can save their card metadata"
   ON public.payment_methods FOR INSERT TO authenticated
   WITH CHECK ((SELECT auth.uid()) = user_id);
 
+DROP POLICY IF EXISTS "Users can edit their card metadata" ON public.payment_methods;
+CREATE POLICY "Users can edit their card metadata"
+  ON public.payment_methods FOR UPDATE TO authenticated
+  USING ((SELECT auth.uid()) = user_id)
+  WITH CHECK ((SELECT auth.uid()) = user_id);
+DROP POLICY IF EXISTS "Users can remove their saved cards" ON public.payment_methods;
+CREATE POLICY "Users can remove their saved cards"
+  ON public.payment_methods FOR DELETE TO authenticated
+  USING ((SELECT auth.uid()) = user_id);
+
 REVOKE ALL ON public.payment_methods FROM anon, authenticated;
 GRANT SELECT ON public.payment_methods TO authenticated;
 GRANT INSERT (user_id, brand, last4, exp_month, exp_year, cardholder_name)
   ON public.payment_methods TO authenticated;
 GRANT ALL ON public.payment_methods TO service_role;
+GRANT UPDATE (cardholder_name, exp_month, exp_year) ON public.payment_methods TO authenticated;
+GRANT DELETE ON public.payment_methods TO authenticated;
 
 COMMIT;
 NOTIFY pgrst, 'reload schema';

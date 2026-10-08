@@ -7,7 +7,7 @@ import { savePaymentMethod } from '../services/paymentMethods';
 
 const emptyForm = { number: '', expiry: '', cvv: '', name: '', saveForFuture: false };
 
-export default function AddCardScreen({ userId, isDemo, onBack, onSaved }) {
+export default function AddCardScreen({ userId, isDemo, onBack, onSaved, backLabel = 'Back to payment' }) {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -36,7 +36,7 @@ export default function AddCardScreen({ userId, isDemo, onBack, onSaved }) {
     <SafeAreaView edges={['bottom']} style={styles.screen}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => { if (!busy) onBack(); }} disabled={busy}
-          accessibilityRole="button" accessibilityLabel="Back to payment" hitSlop={12}>
+          accessibilityRole="button" accessibilityLabel={backLabel} hitSlop={12}>
           <Feather name="arrow-left" size={23} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.title} accessibilityRole="header">Add Card</Text>
