@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, StatusBar } from 'react-native';
-import { SafeAreaProvider, SafeAreaView, initialWindowMetrics } from 'react-native-safe-area-context';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, SafeAreaView, StatusBar } from 'react-native';
 
+// --- Rashmika's Auth & Profile Screens (Original / Untouched) ---
 import LoadingScreen from './src/screens/LoadingScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterSelectionScreen from './src/screens/RegisterSelectionScreen';
@@ -13,19 +13,168 @@ import TutorProfileScreen from './src/screens/TutorProfileScreen';
 import PaymentHistoryScreen from './src/screens/PaymentHistoryScreen';
 import { apiService } from './src/services/api';
 
+// --- Yomali's Booking Screens ---
+import ScheduleScreen from './src/screens/ScheduleScreen';
+import SessionPreferencesScreen from './src/screens/SessionPreferencesScreen';
+import BookingSummaryScreen from './src/screens/BookingSummaryScreen';
+import MyBookingsScreen from './src/screens/MyBookingsScreen';
+import { fetchAllBookings } from './src/bookingService';
+
 export default function App() {
-  // Screen components stay in src/screens, including payment history.
+  // Current screen state
   const [currentScreen, setCurrentScreen] = useState('loading');
+
   const [currentUser, setCurrentUser] = useState(null);
   const [verificationEmail, setVerificationEmail] = useState('');
   const [demoOtpCode, setDemoOtpCode] = useState('');
   const isPaymentHistory = currentScreen === 'paymentHistory';
   const openAccount = () => setCurrentScreen(currentUser?.role === 'Tutor' ? 'tutorProfile' : 'studentProfile');
 
-  const handleLogout = async () => {
-    await apiService.logout();
+  const today = new Date();
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  // Real-time Capacity Database (Yomali's Booking Logic)
+  const [sessionCapacities, setSessionCapacities] = useState({});
+
+  // Dynamic Bookings State (Upcoming & Past)
+  const [myBookings, setMyBookings] = useState([]);
+
+  // Fetch real live bookings from Supabase on launch
+  useEffect(() => {
+    const loadInitialBookings = async () => {
+      try {
+        const data = await fetchAllBookings();
+        if (data && data.length > 0) {
+          setMyBookings(data);
+        }
+      } catch (err) {
+        console.log('Error fetching initial bookings in App.js:', err);
+      }
+    };
+    loadInitialBookings();
+  }, []);
+
+  const [currentBooking, setCurrentBooking] = useState({
+    year: today.getFullYear(),
+    month: today.getMonth(),
+    monthName: monthNames[today.getMonth()],
+    date: today.getDate(),
+    slot: '6:00 PM',
+    mode: 'physical',
+    groupSize: 'small',
+  });
+
+  const getCapacityForSlot = (year, month, date, slot) => {
+    const key = `${year}-${month}-${date}-${slot}`;
+    return sessionCapacities[key] || {
+      privateBooked: false,
+      smallBookedCount: 0,
+      largeBookedCount: 0,
+    };
+  };
+
+  const handleConfirmBooking = (bookingData) => {
+    const {
+      id,
+      year = today.getFullYear(),
+      month = today.getMonth(),
+      date = today.getDate(),
+      slot = '6:00 PM',
+      groupSize = 'small',
+      group_size = 'small',
+      mode = 'physical',
+      total_fee = 750,
+      totalFee = 750,
+      tutor_name = 'Sarith Samarakoon',
+      tutorName = 'Sarith Samarakoon',
+      subject = 'Data Structures & Algorithms',
+    } = bookingData || {};
+
+    const actualGroupSize = (groupSize || group_size || 'small').toLowerCase();
+    const key = `${year}-${month}-${date}-${slot}`;
+
+    // Add new booking dynamically to myBookings list
+    const newBookingItem = {
+      id: id || `booking-${Date.now()}`,
+      tutor_name: tutor_name || tutorName,
+      subject: subject,
+      year,
+      month,
+      date,
+      slot,
+      mode,
+      group_size: actualGroupSize,
+      total_fee: total_fee || totalFee,
+      status: 'Confirmed',
+    };
+
+    setMyBookings((prev) => [newBookingItem, ...prev]);
+
+    setSessionCapacities((prev) => {
+      const current = prev[key] || {
+        privateBooked: false,
+        smallBookedCount: 0,
+        largeBookedCount: 0,
+      };
+
+      if (actualGroupSize === 'private') {
+        return { ...prev, [key]: { ...current, privateBooked: true } };
+      } else if (actualGroupSize === 'small') {
+        return {
+          ...prev,
+          [key]: { ...current, smallBookedCount: Math.min(5, current.smallBookedCount + 1) },
+        };
+      } else if (actualGroupSize === 'large') {
+        return {
+          ...prev,
+          [key]: { ...current, largeBookedCount: Math.min(10, current.largeBookedCount + 1) },
+        };
+      }
+      return prev;
+    });
+  };
+
+  const handleCancelBooking = (bookingId) => {
+    setMyBookings((prev) => prev.filter((b) => b.id !== bookingId));
+  };
+
+  const handleDeleteBooking = (bookingId) => {
+    setMyBookings((prev) => prev.filter((b) => b.id !== bookingId));
+  };
+
+  const handleCompleteBooking = (bookingId) => {
+    setMyBookings((prev) =>
+      prev.map((b) => (b.id === bookingId ? { ...b, status: 'Completed' } : b))
+    );
+  };
+
+  const handleLogout = () => {
     setCurrentUser(null);
     setCurrentScreen('login');
+  };
+
+  // Global Navigation Controller
+  const navigation = {
+    navigate: (screenName, params = {}) => {
+      if (params) {
+        setCurrentBooking((prev) => ({ ...prev, ...params }));
+      }
+      setCurrentScreen(screenName);
+    },
+    goBack: () => {
+      if (currentScreen === 'MyBookingsScreen') {
+        setCurrentScreen('ScheduleScreen');
+      } else if (currentScreen === 'BookingSummaryScreen') {
+        setCurrentScreen('SessionPreferencesScreen');
+      } else if (currentScreen === 'SessionPreferencesScreen') {
+        setCurrentScreen('ScheduleScreen');
+      } else if (currentScreen === 'studentProfile') {
+        setCurrentScreen('ScheduleScreen');
+      }
+    },
   };
 
   return (
@@ -36,13 +185,11 @@ export default function App() {
       >
         <StatusBar barStyle={isPaymentHistory ? 'light-content' : 'dark-content'} backgroundColor={isPaymentHistory ? '#7100FF' : '#FFFFFF'} />
 
-        {/* Main App Content View */}
-        <View style={styles.content}>
-          {currentScreen === 'loading' && (
-            <LoadingScreen
-              onFinishLoading={() => setCurrentScreen('login')}
-            />
-          )}
+      <View style={styles.content}>
+        {/* ================= 1. RASHMIKA'S FLOW (UNTOUCHED) ================= */}
+        {currentScreen === 'loading' && (
+          <LoadingScreen onFinishLoading={() => setCurrentScreen('login')} />
+        )}
 
           {currentScreen === 'login' && (
             <LoginScreen
@@ -129,12 +276,75 @@ export default function App() {
             />
           )}
 
-          {isPaymentHistory && (
-            <PaymentHistoryScreen key={currentUser?.id} onBackToAccount={openAccount} userId={currentUser?.id} />
-          )}
-        </View>
-      </SafeAreaView>
-    </SafeAreaProvider>
+        {currentScreen === 'verifyOtp' && (
+          <EmailVerificationScreen
+            email={verificationEmail}
+            demoOtp={demoOtpCode}
+            onVerificationSuccess={() => {
+              if (currentUser?.role === 'Tutor') {
+                setCurrentScreen('tutorProfile');
+              } else {
+                setCurrentScreen('studentProfile');
+              }
+            }}
+            onBack={() => setCurrentScreen('login')}
+          />
+        )}
+
+        {currentScreen === 'studentProfile' && (
+          <StudentProfileScreen
+            user={currentUser}
+            navigation={navigation}
+            onNavigateToBookings={() => setCurrentScreen('ScheduleScreen')}
+            onEditProfile={() => setCurrentScreen('studentReg')}
+            onLogout={handleLogout}
+          />
+        )}
+
+        {currentScreen === 'tutorProfile' && (
+          <TutorProfileScreen
+            user={currentUser}
+            onEditProfile={() => setCurrentScreen('tutorReg')}
+            onLogout={handleLogout}
+          />
+        )}
+
+        {/* ================= 2. YOMALI'S BOOKING FLOW ================= */}
+        {currentScreen === 'ScheduleScreen' && (
+          <ScheduleScreen
+            navigation={navigation}
+            currentBooking={currentBooking}
+            getCapacityForSlot={getCapacityForSlot}
+          />
+        )}
+
+        {currentScreen === 'SessionPreferencesScreen' && (
+          <SessionPreferencesScreen
+            navigation={navigation}
+            currentBooking={currentBooking}
+            getCapacityForSlot={getCapacityForSlot}
+          />
+        )}
+
+        {currentScreen === 'BookingSummaryScreen' && (
+          <BookingSummaryScreen
+            navigation={navigation}
+            currentBooking={currentBooking}
+            onConfirm={handleConfirmBooking}
+          />
+        )}
+
+        {currentScreen === 'MyBookingsScreen' && (
+          <MyBookingsScreen
+            navigation={navigation}
+            myBookings={myBookings}
+            onCancelBooking={handleCancelBooking}
+            onCompleteBooking={handleCompleteBooking}
+            onDeleteBooking={handleDeleteBooking}
+          />
+        )}
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -145,8 +355,5 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-  },
-  paymentSafeArea: {
-    backgroundColor: '#7100FF',
   },
 });

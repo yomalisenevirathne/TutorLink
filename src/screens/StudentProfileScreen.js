@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Switch, ScrollView, Alert } from 'react-native';
 
-export default function StudentProfileScreen({ user, onEditProfile, onLogout, onNavigateToPayments }) {
+export default function StudentProfileScreen({ user, onEditProfile, onLogout, navigation, onNavigateToBookings, onNavigateToPayments }) {
   const [privacyEnabled, setPrivacyEnabled] = useState(user?.privacyEnabled || false);
   const [activeTab, setActiveTab] = useState('Account');
 
@@ -87,7 +87,17 @@ export default function StudentProfileScreen({ user, onEditProfile, onLogout, on
           <Text style={[styles.tabLabel, activeTab === 'Home' && styles.tabLabelActive]}>Home</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('Bookings')}>
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => {
+            setActiveTab('Bookings');
+            if (onNavigateToBookings) {
+              onNavigateToBookings();
+            } else if (navigation?.navigate) {
+              navigation.navigate('ScheduleScreen');
+            }
+          }}
+        >
           <Text style={styles.tabIcon}>📅</Text>
           <Text style={[styles.tabLabel, activeTab === 'Bookings' && styles.tabLabelActive]}>Bookings</Text>
         </TouchableOpacity>
