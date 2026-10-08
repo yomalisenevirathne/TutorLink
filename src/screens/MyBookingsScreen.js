@@ -12,27 +12,30 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { fetchAllBookings, cancelBookingInDb } from '../utils/supabase';
+import { fetchAllBookings, cancelBookingInDb, deleteBookingFromDb } from '../bookingService';
 
 export default function MyBookingsScreen({
   navigation,
   myBookings: propBookings,
   onCancelBooking,
   onCompleteBooking,
+  onDeleteBooking,
 }) {
   const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming' or 'past'
   const [localBookings, setLocalBookings] = useState([]);
-  const [loading, setLoading] = useState(!propBookings);
+  const [loading, setLoading] = useState(false);
 
-  // Use props if provided, otherwise local state
-  const bookings = propBookings || localBookings;
-
-  // Supabase Database fallback
-  const loadBookingsFromDb = async () => {
+  // Sync propBookings with local state if provided
+  useEffect(() => {
     if (propBookings && propBookings.length > 0) {
-      setLoading(false);
-      return;
+      setLocalBookings(propBookings);
+    } else {
+      loadBookingsFromDb();
     }
+  }, [propBookings]);
+
+  // Supabase Database fetch
+  const loadBookingsFromDb = async () => {
     setLoading(true);
     try {
       const data = await fetchAllBookings();
@@ -40,21 +43,33 @@ export default function MyBookingsScreen({
         setLocalBookings(data);
       }
     } catch (err) {
-      console.log('Error loading bookings:', err);
+      console.log('Error loading bookings from Supabase:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (!propBookings) {
-      loadBookingsFromDb();
-    }
-  }, [propBookings]);
+  const bookings = localBookings;
 
   // Dynamic Categorization
   const upcomingBookings = bookings.filter((item) => item.status === 'Confirmed');
   const pastBookings = bookings.filter((item) => item.status === 'Completed');
+
+  const monthNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  const formatDisplayDate = (item) => {
+    if (item.year && item.date) {
+      const mName = item.month !== undefined ? (monthNames[item.month] || 'Sep') : 'Sep';
+      return `${mName} ${item.date}, ${item.year}`;
+    }
+    if (item.booking_date) {
+      return item.booking_date;
+    }
+    return `Date: ${item.date || '15'}`;
+  };
 
   // Cancel Booking Handler
   const handleCancel = (id, tutor) => {
@@ -71,7 +86,7 @@ export default function MyBookingsScreen({
               onCancelBooking(id);
             }
             setLocalBookings((prev) => prev.filter((item) => item.id !== id));
-            cancelBookingInDb(id).catch(() => {});
+            await cancelBookingInDb(id);
             Alert.alert('Session Cancelled', 'Your booking has been cancelled.');
           },
         },
@@ -79,7 +94,7 @@ export default function MyBookingsScreen({
     );
   };
 
-  // Mark as Completed Handler (for testing and lifecycle)
+  // Mark as Completed Handler (for lifecycle and moving to Past tab)
   const handleMarkCompleted = (id, tutor) => {
     Alert.alert(
       'Complete Session',
@@ -101,10 +116,35 @@ export default function MyBookingsScreen({
     );
   };
 
+  // Permanently Delete Past Session Record
+  const handleDeletePastRecord = (id, tutor) => {
+    Alert.alert(
+      'Delete Record',
+      'Are you sure you want to permanently delete this past session record?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (onDeleteBooking) {
+              onDeleteBooking(id);
+            }
+            setLocalBookings((prev) => prev.filter((item) => item.id !== id));
+            await deleteBookingFromDb(id);
+            Alert.alert('Deleted', 'Past session record has been permanently removed.');
+          },
+        },
+      ]
+    );
+  };
+
   const handleReschedule = (item) => {
     navigation?.navigate('ScheduleScreen', {
-      date: item.date,
-      slot: item.slot,
+      year: item.year || new Date().getFullYear(),
+      month: item.month !== undefined ? item.month : new Date().getMonth(),
+      date: item.date || new Date().getDate(),
+      slot: item.slot || item.booking_time || '6:00 PM',
     });
   };
 
@@ -114,7 +154,11 @@ export default function MyBookingsScreen({
 
       {/* Top Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerIconBtn} onPress={() => navigation?.goBack()}>
+        <TouchableOpacity
+          style={styles.headerIconBtn}
+          onPress={() => navigation?.goBack()}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>My Bookings</Text>
@@ -128,11 +172,12 @@ export default function MyBookingsScreen({
         </View>
       </View>
 
-      {/* Screen 5 & 6 Tabs (Upcoming vs Past) */}
+      {/* Tabs: Upcoming vs Past */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === 'upcoming' && styles.activeTabButton]}
           onPress={() => setActiveTab('upcoming')}
+          activeOpacity={0.8}
         >
           <Text style={[styles.tabText, activeTab === 'upcoming' && styles.activeTabText]}>
             Upcoming ({upcomingBookings.length})
@@ -142,6 +187,7 @@ export default function MyBookingsScreen({
         <TouchableOpacity
           style={[styles.tabButton, activeTab === 'past' && styles.activeTabButton]}
           onPress={() => setActiveTab('past')}
+          activeOpacity={0.8}
         >
           <Text style={[styles.tabText, activeTab === 'past' && styles.activeTabText]}>
             Past ({pastBookings.length})
@@ -161,6 +207,12 @@ export default function MyBookingsScreen({
             <View style={styles.emptyContainer}>
               <Ionicons name="calendar-outline" size={48} color="#9CA3AF" />
               <Text style={styles.emptyText}>No upcoming bookings found.</Text>
+              <TouchableOpacity
+                style={styles.scheduleNewBtn}
+                onPress={() => navigation?.navigate('ScheduleScreen')}
+              >
+                <Text style={styles.scheduleNewBtnText}>Book a Session</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             upcomingBookings.map((item) => (
@@ -184,7 +236,7 @@ export default function MyBookingsScreen({
                   <View style={styles.infoLine}>
                     <Ionicons name="calendar-outline" size={15} color="#4B5563" />
                     <Text style={styles.infoText}>
-                      Mon, Sep {item.date || 15}, {item.year || 2026} • {item.slot || '6:00 PM'}
+                      {formatDisplayDate(item)} • {item.slot || item.booking_time || '6:00 PM'}
                     </Text>
                   </View>
                   <View style={[styles.infoLine, { marginTop: 6 }]}>
@@ -197,11 +249,12 @@ export default function MyBookingsScreen({
                   </View>
                 </View>
 
-                {/* Action Buttons: Cancel, Reschedule, Mark Completed */}
+                {/* Action Buttons: Cancel, Reschedule */}
                 <View style={styles.actionRow}>
                   <TouchableOpacity
                     style={styles.cancelBtn}
                     onPress={() => handleCancel(item.id, item.tutor_name || 'Sarith')}
+                    activeOpacity={0.8}
                   >
                     <Text style={styles.cancelBtnText}>Cancel</Text>
                   </TouchableOpacity>
@@ -209,15 +262,17 @@ export default function MyBookingsScreen({
                   <TouchableOpacity
                     style={styles.rescheduleBtn}
                     onPress={() => handleReschedule(item)}
+                    activeOpacity={0.8}
                   >
                     <Text style={styles.rescheduleBtnText}>Reschedule</Text>
                   </TouchableOpacity>
                 </View>
 
-                {/* Simulation button for quick testing */}
+                {/* Simulation button to mark completed for testing */}
                 <TouchableOpacity
                   style={styles.completeActionBtn}
                   onPress={() => handleMarkCompleted(item.id, item.tutor_name || 'Tutor')}
+                  activeOpacity={0.8}
                 >
                   <Ionicons name="checkmark-circle-outline" size={16} color="#059669" />
                   <Text style={styles.completeActionText}>Mark as Completed</Text>
@@ -251,7 +306,7 @@ export default function MyBookingsScreen({
                   <View style={styles.infoLine}>
                     <Ionicons name="calendar-outline" size={15} color="#4B5563" />
                     <Text style={styles.infoText}>
-                      Mon, Sep {item.date || 10}, {item.year || 2026} • {item.slot || '6:00 PM'}
+                      {formatDisplayDate(item)} • {item.slot || item.booking_time || '6:00 PM'}
                     </Text>
                   </View>
                   <View style={[styles.infoLine, { marginTop: 6 }]}>
@@ -264,21 +319,37 @@ export default function MyBookingsScreen({
                   </View>
                 </View>
 
-                {/* Action Buttons: Rate Session & Book Again */}
+                {/* Action Buttons: Rate Session, Book Again, and Delete Option */}
                 <View style={styles.actionRow}>
                   <TouchableOpacity
                     style={styles.rateBtn}
-                    onPress={() => Alert.alert('Rate Session', `Thank you for rating your session with ${item.tutor_name}! ⭐⭐⭐⭐⭐`)}
+                    onPress={() =>
+                      Alert.alert(
+                        'Rate Session',
+                        `Thank you for rating your session with ${item.tutor_name || 'Sarith'}! ⭐⭐⭐⭐⭐`
+                      )
+                    }
+                    activeOpacity={0.8}
                   >
                     <Ionicons name="star" size={14} color="#D97706" style={{ marginRight: 4 }} />
-                    <Text style={styles.rateBtnText}>Rate Session</Text>
+                    <Text style={styles.rateBtnText}>Rate</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.rescheduleBtn}
+                    style={styles.bookAgainBtn}
                     onPress={() => handleReschedule(item)}
+                    activeOpacity={0.8}
                   >
-                    <Text style={styles.rescheduleBtnText}>Book Again</Text>
+                    <Text style={styles.bookAgainBtnText}>Book Again</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.deleteRecordBtn}
+                    onPress={() => handleDeletePastRecord(item.id, item.tutor_name || 'Sarith')}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="trash-outline" size={15} color="#EF4444" style={{ marginRight: 4 }} />
+                    <Text style={styles.deleteRecordBtnText}>Delete</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -299,6 +370,7 @@ export default function MyBookingsScreen({
               <TouchableOpacity
                 style={styles.backHomeBtn}
                 onPress={() => navigation?.navigate('ScheduleScreen')}
+                activeOpacity={0.8}
               >
                 <Text style={styles.backHomeBtnText}>Back to Home</Text>
               </TouchableOpacity>
@@ -438,14 +510,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 14,
-    gap: 12,
+    gap: 8,
   },
   cancelBtn: {
     flex: 1,
     borderWidth: 1,
     borderColor: '#D1D5DB',
     borderRadius: 8,
-    paddingVertical: 10,
+    paddingVertical: 9,
     alignItems: 'center',
   },
   cancelBtnText: { fontSize: 13, fontWeight: '600', color: '#4B5563' },
@@ -453,7 +525,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#D48B06',
     borderRadius: 8,
-    paddingVertical: 10,
+    paddingVertical: 9,
     alignItems: 'center',
   },
   rescheduleBtnText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
@@ -463,12 +535,33 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FDE68A',
     borderRadius: 8,
-    paddingVertical: 10,
+    paddingVertical: 9,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rateBtnText: { fontSize: 13, fontWeight: '700', color: '#D97706' },
+  rateBtnText: { fontSize: 12, fontWeight: '700', color: '#D97706' },
+  bookAgainBtn: {
+    flex: 1.2,
+    backgroundColor: '#D48B06',
+    borderRadius: 8,
+    paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bookAgainBtnText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
+  deleteRecordBtn: {
+    flex: 1,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 8,
+    paddingVertical: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteRecordBtnText: { fontSize: 12, fontWeight: '700', color: '#DC2626' },
   completeActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -532,8 +625,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
   },
   backHomeBtnText: { fontSize: 14, fontWeight: '700', color: '#1F2937' },
-  emptyContainer: { alignItems: 'center', marginTop: 40 },
-  emptyText: { color: '#9CA3AF', fontSize: 14, marginTop: 10 },
+  emptyContainer: { alignItems: 'center', marginTop: 40, paddingHorizontal: 20 },
+  emptyText: { color: '#9CA3AF', fontSize: 14, marginTop: 10, marginBottom: 16 },
+  scheduleNewBtn: {
+    backgroundColor: '#D48B06',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  scheduleNewBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 
   bottomNav: {
     flexDirection: 'row',
