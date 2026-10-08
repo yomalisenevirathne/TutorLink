@@ -52,7 +52,7 @@ function PaymentCard({ payment }) {
   );
 }
 
-export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo = false, cardsVersion = 0, onManagePayments, onAddCard }) {
+export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo = false, cardsVersion = 0, onManagePayments, onAddCard, onStarPress }) {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -132,7 +132,11 @@ export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo =
           <Feather name="arrow-left" size={23} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.title} accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Payment History</Text>
-        <TouchableOpacity style={styles.settingsButton} onPress={() => { setFilterVisible(false); setSettingsVisible(true); }}
+        <TouchableOpacity style={styles.headerActionButton} onPress={onStarPress}
+          accessibilityRole="button" accessibilityLabel="View all tutors">
+          <Feather name="star" size={23} color="#FFFFFF" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.headerActionButton} onPress={() => { setFilterVisible(false); setSettingsVisible(true); }}
           accessibilityRole="button" accessibilityLabel="Payment settings" accessibilityState={{ expanded: settingsVisible }}>
           <Feather name="settings" size={23} color="#FFFFFF" />
         </TouchableOpacity>
@@ -305,7 +309,7 @@ const styles = StyleSheet.create({
   tabLabelActive: { color: '#7C3AED', fontWeight: '700' },
   header: { minHeight: 70, backgroundColor: '#7100FF', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, gap: 12 },
   title: { flex: 1, color: '#FFFFFF', fontSize: 21, fontWeight: '700' },
-  settingsButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  headerActionButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 26, marginTop: 18, marginBottom: 4 },
   searchBox: { flex: 1, minHeight: 38, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 11, borderWidth: 1, borderColor: '#9454D3', borderRadius: 3, gap: 10 },
   searchInput: { flex: 1, minWidth: 0, paddingVertical: 6, fontSize: 14, color: '#222222' },
