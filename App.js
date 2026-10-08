@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, SafeAreaView, StatusBar } from 'react-native';
 
 // --- Rashmika's Auth & Profile Screens (Original / Untouched) ---
@@ -16,56 +16,48 @@ import ScheduleScreen from './src/screens/ScheduleScreen';
 import SessionPreferencesScreen from './src/screens/SessionPreferencesScreen';
 import BookingSummaryScreen from './src/screens/BookingSummaryScreen';
 import MyBookingsScreen from './src/screens/MyBookingsScreen';
+import { fetchAllBookings } from './src/bookingService';
 
 export default function App() {
-  // 💡 TIP: ඔයාගේ Booking part එක විතරක් test කරද්දී 'ScheduleScreen' තියාගන්න.
-  // Full flow එක (Login සිට) බලද්දී මේක 'loading' කරන්න.
+  // Current screen state
   const [currentScreen, setCurrentScreen] = useState('loading');
 
   const [currentUser, setCurrentUser] = useState(null);
   const [verificationEmail, setVerificationEmail] = useState('');
   const [demoOtpCode, setDemoOtpCode] = useState('');
 
+  const today = new Date();
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
   // Real-time Capacity Database (Yomali's Booking Logic)
   const [sessionCapacities, setSessionCapacities] = useState({});
 
   // Dynamic Bookings State (Upcoming & Past)
-  const [myBookings, setMyBookings] = useState([
-    {
-      id: 'booking-1',
-      tutor_name: 'Isuru Perera',
-      subject: 'OOP in C++',
-      year: 2026,
-      month: 8,
-      monthName: 'September',
-      date: 17,
-      slot: '4:00 PM',
-      mode: 'physical',
-      group_size: 'small',
-      total_fee: 750,
-      status: 'Confirmed',
-    },
-    {
-      id: 'booking-2',
-      tutor_name: 'Sarith Samarakoon',
-      subject: 'Data Structures & Algorithms',
-      year: 2026,
-      month: 8,
-      monthName: 'September',
-      date: 10,
-      slot: '6:00 PM',
-      mode: 'online',
-      group_size: 'private',
-      total_fee: 1250,
-      status: 'Completed',
-    },
-  ]);
+  const [myBookings, setMyBookings] = useState([]);
+
+  // Fetch real live bookings from Supabase on launch
+  useEffect(() => {
+    const loadInitialBookings = async () => {
+      try {
+        const data = await fetchAllBookings();
+        if (data && data.length > 0) {
+          setMyBookings(data);
+        }
+      } catch (err) {
+        console.log('Error fetching initial bookings in App.js:', err);
+      }
+    };
+    loadInitialBookings();
+  }, []);
 
   const [currentBooking, setCurrentBooking] = useState({
-    year: 2026,
-    month: 8,
-    monthName: 'September',
-    date: 15,
+    year: today.getFullYear(),
+    month: today.getMonth(),
+    monthName: monthNames[today.getMonth()],
+    date: today.getDate(),
     slot: '6:00 PM',
     mode: 'physical',
     groupSize: 'small',
@@ -83,31 +75,35 @@ export default function App() {
   const handleConfirmBooking = (bookingData) => {
     const {
       id,
-      year = 2026,
-      month = 8,
-      date = 15,
+      year = today.getFullYear(),
+      month = today.getMonth(),
+      date = today.getDate(),
       slot = '6:00 PM',
       groupSize = 'small',
+      group_size = 'small',
       mode = 'physical',
+      total_fee = 750,
       totalFee = 750,
+      tutor_name = 'Sarith Samarakoon',
       tutorName = 'Sarith Samarakoon',
       subject = 'Data Structures & Algorithms',
     } = bookingData || {};
 
+    const actualGroupSize = (groupSize || group_size || 'small').toLowerCase();
     const key = `${year}-${month}-${date}-${slot}`;
 
     // Add new booking dynamically to myBookings list
     const newBookingItem = {
       id: id || `booking-${Date.now()}`,
-      tutor_name: tutorName,
+      tutor_name: tutor_name || tutorName,
       subject: subject,
       year,
       month,
       date,
       slot,
       mode,
-      group_size: groupSize,
-      total_fee: totalFee,
+      group_size: actualGroupSize,
+      total_fee: total_fee || totalFee,
       status: 'Confirmed',
     };
 
@@ -120,14 +116,14 @@ export default function App() {
         largeBookedCount: 0,
       };
 
-      if (groupSize === 'private') {
+      if (actualGroupSize === 'private') {
         return { ...prev, [key]: { ...current, privateBooked: true } };
-      } else if (groupSize === 'small') {
+      } else if (actualGroupSize === 'small') {
         return {
           ...prev,
           [key]: { ...current, smallBookedCount: Math.min(5, current.smallBookedCount + 1) },
         };
-      } else if (groupSize === 'large') {
+      } else if (actualGroupSize === 'large') {
         return {
           ...prev,
           [key]: { ...current, largeBookedCount: Math.min(10, current.largeBookedCount + 1) },
@@ -138,6 +134,10 @@ export default function App() {
   };
 
   const handleCancelBooking = (bookingId) => {
+    setMyBookings((prev) => prev.filter((b) => b.id !== bookingId));
+  };
+
+  const handleDeleteBooking = (bookingId) => {
     setMyBookings((prev) => prev.filter((b) => b.id !== bookingId));
   };
 
@@ -299,6 +299,7 @@ export default function App() {
             myBookings={myBookings}
             onCancelBooking={handleCancelBooking}
             onCompleteBooking={handleCompleteBooking}
+            onDeleteBooking={handleDeleteBooking}
           />
         )}
       </View>

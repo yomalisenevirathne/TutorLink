@@ -11,21 +11,32 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { createBookingInDb } from '../utils/supabase';
+import { createBookingInDb } from '../bookingService';
 import BookingSuccessModal from '../components/BookingSuccessModal';
 
-export default function BookingSummaryScreen({ navigation, currentBooking, groupPlans, onConfirm }) {
-  // Screen 4 Confirmed Modal සහ Loading State
+export default function BookingSummaryScreen({
+  navigation,
+  currentBooking,
+  groupPlans,
+  onConfirm,
+}) {
   const [isSuccessModalVisible, setIsSuccessModalVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Dynamic Data (Fallback values සහිතව)
-  const year = currentBooking?.year || 2026;
-  const month = currentBooking?.month ?? 8;
-  const date = currentBooking?.date || 15;
+  // Dynamic Data
+  const now = new Date();
+  const year = currentBooking?.year || now.getFullYear();
+  const month = currentBooking?.month !== undefined ? currentBooking?.month : now.getMonth();
+  const date = currentBooking?.date || now.getDate();
   const slot = currentBooking?.slot || '6:00 PM';
   const mode = currentBooking?.mode || 'physical';
   const groupSize = currentBooking?.groupSize || 'small';
+
+  const monthNames = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  const displayMonth = monthNames[month] || 'Sep';
 
   const defaultPlans = {
     private: { title: '1-on-1 Private', fee: 1200 },
@@ -38,37 +49,57 @@ export default function BookingSummaryScreen({ navigation, currentBooking, group
   const platformFee = 50;
   const total = sessionFee + platformFee;
 
-  // Real Database Save & Screen 4 Trigger Function
+  // Real Database Save & Trigger Modal
   const handlePay = async () => {
     setIsSubmitting(true);
     try {
-      // 1. Supabase 'bookings' table එකට Real Data Insert කිරීම
-      const result = await createBookingInDb({
-        year,
-        month,
-        date,
-        slot,
-        mode,
-        groupSize,
-        totalFee: total,
-      });
+      const bookingPayload = {
+        tutor_name: 'Sarith Samarakoon',
+        subject: 'Data Structures & Algorithms',
+        year: Number(year),
+        month: Number(month) + 1, // 1-indexed for Supabase
+        date: Number(date),
+        slot: slot,
+        mode: mode,
+        group_size: groupSize,
+        groupSize: groupSize,
+        total_fee: Number(total),
+        session_fee: Number(sessionFee),
+        platform_fee: Number(platformFee),
+        status: 'Confirmed',
+      };
 
-      if (result.success) {
-        // App.js එකේ Local State / Capacity එක update කිරීම
-        const savedId = result.data?.[0]?.id || result.data?.id;
-        if (onConfirm) {
-          onConfirm({ id: savedId, year, month, date, slot, groupSize, mode, totalFee: total });
-        }
-        // Screen 4 (Booking Confirmed Modal) එක open කිරීම
-        setIsSuccessModalVisible(true);
-      } else {
-        Alert.alert(
-          'Booking Failed',
-          'Could not save your booking to Supabase. Please check your internet connection and try again.'
-        );
+      // 1. Insert into Supabase bookings table
+      const savedBooking = await createBookingInDb(bookingPayload);
+
+      const savedId = savedBooking?.id || `booking-${Date.now()}`;
+
+      // 2. Update local state in App.js for instant UI/capacity sync
+      if (onConfirm) {
+        onConfirm({
+          id: savedId,
+          tutorName: 'Sarith Samarakoon',
+          tutor_name: 'Sarith Samarakoon',
+          subject: 'Data Structures & Algorithms',
+          year,
+          month,
+          date,
+          slot,
+          groupSize,
+          group_size: groupSize,
+          mode,
+          total_fee: total,
+          totalFee: total,
+          fee: total,
+          status: 'Confirmed',
+        });
       }
-    } catch (err) {
-      Alert.alert('Error', err.message || 'An unexpected error occurred.');
+
+      // 3. Show confirmation modal
+      setIsSuccessModalVisible(true);
+    } catch (error) {
+      console.error('SUPABASE ERROR in handlePay:', error);
+      Alert.alert('Database Error', error.message || 'Failed to save booking to Supabase.');
     } finally {
       setIsSubmitting(false);
     }
@@ -80,7 +111,11 @@ export default function BookingSummaryScreen({ navigation, currentBooking, group
 
       {/* Top Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerIconBtn} onPress={() => navigation?.goBack()}>
+        <TouchableOpacity
+          style={styles.headerIconBtn}
+          onPress={() => navigation?.goBack()}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Booking Summary</Text>
@@ -115,7 +150,9 @@ export default function BookingSummaryScreen({ navigation, currentBooking, group
         <View style={styles.detailsCard}>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Date</Text>
-            <Text style={styles.detailValue}>Mon, Sep {date}, {year}</Text>
+            <Text style={styles.detailValue}>
+              {displayMonth} {date}, {year}
+            </Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Time</Text>
@@ -130,7 +167,7 @@ export default function BookingSummaryScreen({ navigation, currentBooking, group
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Group Size</Text>
             <Text style={styles.detailValue}>
-              {groupSize === 'small' ? 'Small Group (3/5 filled)' : plan.title}
+              {groupSize === 'small' ? 'Small Group (2-5)' : plan.title}
             </Text>
           </View>
           <View style={styles.detailRow}>
@@ -182,7 +219,7 @@ export default function BookingSummaryScreen({ navigation, currentBooking, group
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Screen 4: Real Booking Confirmed Modal */}
+      {/* Booking Confirmed Modal */}
       <BookingSuccessModal
         visible={isSuccessModalVisible}
         bookingDetails={{ date, slot }}
@@ -270,7 +307,13 @@ const styles = StyleSheet.create({
   tutorRole: { fontSize: 12, color: '#6B7280', marginTop: 2 },
   ratingRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   ratingText: { fontSize: 12, color: '#4B5563', fontWeight: '600' },
-  sectionHeading: { fontSize: 16, fontWeight: '700', color: '#111827', marginTop: 20, marginBottom: 10 },
+  sectionHeading: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: 20,
+    marginBottom: 10,
+  },
   detailsCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -278,7 +321,11 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     padding: 14,
   },
-  detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 7 },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 7,
+  },
   detailLabel: { fontSize: 13, color: '#6B7280' },
   detailValue: { fontSize: 13, color: '#111827', fontWeight: '600' },
   subjectText: { color: '#6A1B9A', fontWeight: '700' },
@@ -295,7 +342,14 @@ const styles = StyleSheet.create({
     padding: 12,
     marginTop: 18,
   },
-  reminderText: { fontSize: 12, color: '#065F46', marginLeft: 8, flex: 1, fontWeight: '500', lineHeight: 18 },
+  reminderText: {
+    fontSize: 12,
+    color: '#065F46',
+    marginLeft: 8,
+    flex: 1,
+    fontWeight: '500',
+    lineHeight: 18,
+  },
   payBtn: {
     backgroundColor: '#D48B06',
     borderRadius: 10,
