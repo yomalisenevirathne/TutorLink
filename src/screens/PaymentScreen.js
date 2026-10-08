@@ -7,14 +7,14 @@ import { getSavedPaymentMethods, savedCardsErrorMessage } from '../services/paym
 
 const amountText = (amount) => formatPaymentAmount({ amount, currency: 'LKR' });
 
-export default function PaymentScreen({ booking, userId, isDemo = false, onBack }) {
+export default function PaymentScreen({ booking, userId, isDemo = false, cardsVersion = 0, onBack, onAddCard }) {
   const [notice, setNotice] = useState('');
   const [cardsState, setCardsState] = useState(null);
   const [selectedCardId, setSelectedCardId] = useState(null);
   const [reload, setReload] = useState(0);
   const hasBooking = booking && Number.isFinite(booking.total) && booking.total > 0;
   const cardsLoading = !cardsState || cardsState.userId !== userId || cardsState.reload !== reload
-    || cardsState.isDemo !== isDemo || cardsState.hasBooking !== hasBooking;
+    || cardsState.isDemo !== isDemo || cardsState.hasBooking !== hasBooking || cardsState.cardsVersion !== cardsVersion;
   const cards = cardsLoading ? [] : cardsState.cards;
   const cardsError = cardsLoading ? '' : cardsState.error;
   const selectedCard = cards.find((card) => card.id === selectedCardId);
@@ -25,16 +25,16 @@ export default function PaymentScreen({ booking, userId, isDemo = false, onBack 
       : getSavedPaymentMethods(userId, { signal: controller.signal });
     request.then((saved) => {
       if (controller.signal.aborted) return;
-      setCardsState({ userId, reload, isDemo, hasBooking, cards: saved, error: '' });
+      setCardsState({ userId, reload, isDemo, hasBooking, cardsVersion, cards: saved, error: '' });
       setSelectedCardId(saved[0]?.id ?? null);
     }).catch((error) => {
       if (!controller.signal.aborted) {
-        setCardsState({ userId, reload, isDemo, hasBooking, cards: [], error: savedCardsErrorMessage(error) });
+        setCardsState({ userId, reload, isDemo, hasBooking, cardsVersion, cards: [], error: savedCardsErrorMessage(error) });
         setSelectedCardId(null);
       }
     });
     return () => controller.abort();
-  }, [userId, isDemo, hasBooking, reload]);
+  }, [userId, isDemo, hasBooking, reload, cardsVersion]);
   const displayDate = hasBooking
     ? new Date(booking.year, booking.month, booking.date).toLocaleDateString('en-US', {
       month: 'short', day: 'numeric', year: 'numeric',
@@ -106,7 +106,7 @@ export default function PaymentScreen({ booking, userId, isDemo = false, onBack 
               style={styles.addCard}
               accessibilityRole="button"
               accessibilityLabel="Add New Card"
-              onPress={() => setNotice('Adding a card will be available when secure card payments are enabled.')}
+              onPress={onAddCard}
             >
               <View style={styles.addIcon}><Feather name="plus" size={20} color="#111111" /></View>
               <Text style={styles.addText}>Add New Card</Text>

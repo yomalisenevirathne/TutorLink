@@ -19,7 +19,7 @@ export async function getSavedPaymentMethods(userId, { signal } = {}) {
     throw error;
   }
 
-  // Only display metadata saved by the card provider's trusted backend.
+  // These masked details are display metadata, not a chargeable payment token.
   let query = supabase.from('payment_methods')
     .select('id, user_id, brand, last4, exp_month, exp_year, is_default')
     .eq('user_id', userId)
@@ -45,6 +45,46 @@ export async function getSavedPaymentMethods(userId, { signal } = {}) {
       expiry: `${String(card.exp_month).padStart(2, '0')}/${String(card.exp_year).slice(-2)}`,
     };
   });
+}
+
+export async function savePaymentMethod(userId, metadata) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError) throw authError;
+  if (!userId || authData?.user?.id !== userId) {
+    const error = new Error('Sign in with a registered account to save cards.');
+    error.code = 'AUTH_REQUIRED';
+    throw error;
+  }
+  const name = String(metadata.cardholder_name || '').trim();
+  const month = Number(metadata.exp_month);
+  const year = Number(metadata.exp_year);
+  if (!['Visa', 'Mastercard', 'American Express'].includes(metadata.brand)
+    || typeof metadata.last4 !== 'string' || !/^\d{4}$/.test(metadata.last4)
+    || !Number.isInteger(month) || month < 1 || month > 12
+    || !Number.isInteger(year) || year < 2000 || year > 9999
+    || name.length < 2 || name.length > 80) throw new Error('Check the card details and try again.');
+
+  // Explicit whitelist: never submit a full number, CVV, client-selected owner or token.
+  const { data, error } = await supabase.from('payment_methods').insert({
+    user_id: authData.user.id,
+    brand: metadata.brand,
+    last4: metadata.last4,
+    exp_month: month,
+    exp_year: year,
+    cardholder_name: name,
+  }).select('id, user_id, brand, last4, exp_month, exp_year, is_default').single();
+  if (error) {
+    if (['PGRST205', '42P01', '42703', 'PGRST204'].includes(error.code)) {
+      const unavailable = new Error('Card saving is not available yet. Please contact support.');
+      unavailable.code = 'CARD_STORAGE_UNAVAILABLE';
+      throw unavailable;
+    }
+    throw new Error("We couldn't save your card. Please try again.");
+  }
+  if (!data?.id || data.user_id !== userId || data.last4 !== metadata.last4)
+    throw new Error('Your card could not be confirmed as saved. Please try again.');
+  return { id: data.id, brand: data.brand, last4: data.last4,
+    expiry: `${String(data.exp_month).padStart(2, '0')}/${String(data.exp_year).slice(-2)}` };
 }
 
 export function savedCardsErrorMessage(error) {

@@ -7,7 +7,7 @@ const { transformSync } = require('@babel/core');
 const userId = '00000000-0000-0000-0000-000000000001';
 const row = { id: 'saved-card-1', user_id: userId, brand: 'Visa', last4: '1042', exp_month: 4, exp_year: 2029, is_default: true };
 
-function cardService({ rows = [row], error = null, authId = userId } = {}) {
+function cardService({ rows = [row], error = null, authId = userId, insertResult } = {}) {
   const requests = [];
   const supabase = {
     auth: { getUser: async () => ({ data: { user: authId ? { id: authId } : null }, error: null }) },
@@ -16,6 +16,8 @@ function cardService({ rows = [row], error = null, authId = userId } = {}) {
       requests.push(request);
       const query = {
         select(columns) { request.columns = columns; return query; },
+        insert(value) { request.insert = value; return query; },
+        single() { return Promise.resolve({ data: error ? null : insertResult || { ...request.insert, id: 'persisted-card', is_default: false }, error }); },
         eq(column, value) { request.filters.push([column, value]); return query; },
         order() { return query; },
         abortSignal() { return query; },
@@ -67,4 +69,30 @@ test('abandoned saved-card requests do not query the database', async () => {
   controller.abort();
   await assert.rejects(service.getSavedPaymentMethods(userId, { signal: controller.signal }), { name: 'AbortError' });
   assert.equal(service.requests.length, 0);
+});
+
+const metadata = { brand: 'Visa', last4: '1111', exp_month: 12, exp_year: 2030, cardholder_name: 'Test Student' };
+
+test('saving inserts only masked fields with the verified owner and confirms the persisted row', async () => {
+  const service = cardService();
+  const saved = await service.savePaymentMethod(userId, {
+    ...metadata, user_id: 'another-user', number: '4111111111111111', cvv: '123', token: 'untrusted-token',
+  });
+  assert.equal(saved.id, 'persisted-card');
+  assert.deepEqual(service.requests[0].insert, { user_id: userId, ...metadata });
+  assert.equal(saved.expiry, '12/30');
+});
+
+test('saving cannot write without a real matching authenticated identity', async () => {
+  for (const authId of [null, 'another-user']) {
+    const service = cardService({ authId });
+    await assert.rejects(service.savePaymentMethod(userId, metadata), { code: 'AUTH_REQUIRED' });
+    assert.equal(service.requests.length, 0);
+  }
+});
+
+test('a rejected insert or unconfirmed database response never reports a saved card', async () => {
+  await assert.rejects(cardService({ error: { code: '42501' } }).savePaymentMethod(userId, metadata), /couldn't save/);
+  await assert.rejects(cardService({ error: { code: 'PGRST205' } }).savePaymentMethod(userId, metadata), { code: 'CARD_STORAGE_UNAVAILABLE' });
+  await assert.rejects(cardService({ insertResult: { ...row, user_id: 'another-user' } }).savePaymentMethod(userId, metadata), /could not be confirmed/);
 });
