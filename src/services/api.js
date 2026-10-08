@@ -213,7 +213,7 @@ export const apiService = {
     mockState.currentUser = null;
     try {
       await supabase.auth.signOut();
-    } catch (err) {
+    } catch (_err) {
       // ignore
     }
     return { success: true };
@@ -226,6 +226,15 @@ export const apiService = {
   },
 
   updateProfile: async (updateData) => {
+    if (!mockState.currentUser) return { success: false, message: 'Please log in before editing your profile.' };
+    if (!mockState.currentUser.isDemo) {
+      const { password: _password, email: _email, ...metadata } = updateData;
+      const { data, error } = await supabase.auth.updateUser({ data: metadata });
+      if (error) return { success: false, message: error.message };
+      if (!data?.user) return { success: false, message: 'Unable to save your profile.' };
+      mockState.currentUser = appUserFromSupabase(data.user, { ...mockState.currentUser, ...metadata });
+      return { success: true, user: mockState.currentUser };
+    }
     const liveResult = await fetchWithFallback('/profile/update', {
       method: 'PUT',
       body: JSON.stringify(updateData)

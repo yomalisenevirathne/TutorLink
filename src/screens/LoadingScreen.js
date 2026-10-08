@@ -1,25 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, Animated, Easing, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
 export default function LoadingScreen({ onFinishLoading, navigation }) {
   const [progress, setProgress] = useState(67);
-  const animatedProgress = new Animated.Value(0.67);
 
   useEffect(() => {
     // Simulate initial loading sequence up to 100%
+    let nextProgress = 67;
     const timer = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(timer);
-          if (onFinishLoading) onFinishLoading();
-          return 100;
-        }
-        return prev + 1;
-      });
+      nextProgress = Math.min(100, nextProgress + 1);
+      setProgress(nextProgress);
+      if (nextProgress === 100) {
+        clearInterval(timer);
+        onFinishLoading?.();
+      }
     }, 40);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [onFinishLoading]);
 
   return (
     <View style={styles.container}>

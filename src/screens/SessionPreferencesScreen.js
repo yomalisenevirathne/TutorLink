@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   Alert,
   ActivityIndicator,
@@ -24,6 +23,7 @@ export default function SessionPreferencesScreen({
     monthName = 'September',
     date = new Date().getDate(),
     slot = '6:00 PM',
+    rescheduleId = null,
   } = currentBooking || {};
 
   // Live Supabase capacity state
@@ -33,6 +33,7 @@ export default function SessionPreferencesScreen({
     largeBookedCount: 0,
   });
   const [loadingCapacity, setLoadingCapacity] = useState(true);
+  const [capacityError, setCapacityError] = useState(null);
 
   // Fetch live Supabase queries for chosen date and slot
   useEffect(() => {
@@ -40,12 +41,12 @@ export default function SessionPreferencesScreen({
     const loadLiveCapacity = async () => {
       setLoadingCapacity(true);
       try {
-        const liveCap = await fetchCapacityForSlot(year, month, date, slot);
+        const liveCap = await fetchCapacityForSlot(year, month, date, slot, rescheduleId);
         if (isMounted && liveCap) {
           setDbCapacity(liveCap);
         }
       } catch (err) {
-        console.error('Error fetching slot capacity:', err);
+        if (isMounted) setCapacityError(err.message || 'Unable to check availability. Please go back and try again.');
       } finally {
         if (isMounted) {
           setLoadingCapacity(false);
@@ -57,7 +58,7 @@ export default function SessionPreferencesScreen({
     return () => {
       isMounted = false;
     };
-  }, [year, month, date, slot]);
+  }, [year, month, date, slot, rescheduleId]);
 
   // Combine with in-memory local state
   const localCap = getCapacityForSlot
@@ -75,31 +76,20 @@ export default function SessionPreferencesScreen({
   const isLargeFull = largeSeatsLeft === 0;
 
   const [selectedMode, setSelectedMode] = useState(currentBooking?.mode || 'physical');
-  const [selectedGroupSize, setSelectedGroupSize] = useState(() => {
-    if (!isSmallFull) return 'small';
-    if (!isPrivateDisabled) return 'private';
-    if (!isLargeFull) return 'large';
-    return null;
-  });
-
-  // Adjust selection if currently selected group size is locked
-  useEffect(() => {
-    if (selectedGroupSize === 'private' && isPrivateDisabled) {
-      if (!isSmallFull) setSelectedGroupSize('small');
-      else if (!isLargeFull) setSelectedGroupSize('large');
-      else setSelectedGroupSize(null);
-    } else if (selectedGroupSize === 'small' && isSmallFull) {
-      if (!isPrivateDisabled) setSelectedGroupSize('private');
-      else if (!isLargeFull) setSelectedGroupSize('large');
-      else setSelectedGroupSize(null);
-    } else if (selectedGroupSize === 'large' && isLargeFull) {
-      if (!isSmallFull) setSelectedGroupSize('small');
-      else if (!isPrivateDisabled) setSelectedGroupSize('private');
-      else setSelectedGroupSize(null);
-    }
-  }, [isPrivateDisabled, isSmallFull, isLargeFull]);
+  const [requestedGroupSize, setSelectedGroupSize] = useState(currentBooking?.groupSize || 'small');
+  const availableGroups = [
+    ...(!isSmallFull ? ['small'] : []),
+    ...(!isPrivateDisabled ? ['private'] : []),
+    ...(!isLargeFull ? ['large'] : []),
+  ];
+  const selectedGroupSize = availableGroups.includes(requestedGroupSize) ? requestedGroupSize : availableGroups[0] ?? null;
 
   const handleContinue = () => {
+    if (loadingCapacity) return;
+    if (capacityError) {
+      Alert.alert('Availability Unavailable', capacityError);
+      return;
+    }
     if (!selectedGroupSize) {
       Alert.alert('Selection Required', 'Please select an available group size.');
       return;
@@ -127,7 +117,7 @@ export default function SessionPreferencesScreen({
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#6A1B9A" />
 
       {/* Header */}
@@ -451,7 +441,7 @@ export default function SessionPreferencesScreen({
           <Text style={styles.navLabel}>Account</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 

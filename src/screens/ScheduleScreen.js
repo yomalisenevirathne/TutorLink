@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   Alert,
 } from 'react-native';
@@ -117,6 +116,11 @@ export default function ScheduleScreen({ navigation, currentBooking, getCapacity
       return;
     }
 
+    if (checkSlotStatus(selectedSlot).isBooked) {
+      Alert.alert('Slot Unavailable', 'Please select an available time slot.');
+      return;
+    }
+
     navigation?.navigate('SessionPreferencesScreen', {
       year: currentYear,
       month: currentMonth,
@@ -156,7 +160,7 @@ export default function ScheduleScreen({ navigation, currentBooking, getCapacity
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#6A1B9A" />
 
       {/* Header */}
@@ -303,7 +307,7 @@ export default function ScheduleScreen({ navigation, currentBooking, getCapacity
           <Text style={styles.navLabel}>Account</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 

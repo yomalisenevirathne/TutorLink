@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   Alert,
   ActivityIndicator,
@@ -51,13 +50,15 @@ export default function BookingSummaryScreen({
 
   // Real Database Save & Trigger Modal
   const handlePay = async () => {
+    if (isSubmitting || isSuccessModalVisible) return;
     setIsSubmitting(true);
     try {
       const bookingPayload = {
         tutor_name: 'Sarith Samarakoon',
         subject: 'Data Structures & Algorithms',
         year: Number(year),
-        month: Number(month) + 1, // 1-indexed for Supabase
+        month: Number(month),
+        rescheduleId: currentBooking?.rescheduleId,
         date: Number(date),
         slot: slot,
         mode: mode,
@@ -72,28 +73,7 @@ export default function BookingSummaryScreen({
       // 1. Insert into Supabase bookings table
       const savedBooking = await createBookingInDb(bookingPayload);
 
-      const savedId = savedBooking?.id || `booking-${Date.now()}`;
-
-      // 2. Update local state in App.js for instant UI/capacity sync
-      if (onConfirm) {
-        onConfirm({
-          id: savedId,
-          tutorName: 'Sarith Samarakoon',
-          tutor_name: 'Sarith Samarakoon',
-          subject: 'Data Structures & Algorithms',
-          year,
-          month,
-          date,
-          slot,
-          groupSize,
-          group_size: groupSize,
-          mode,
-          total_fee: total,
-          totalFee: total,
-          fee: total,
-          status: 'Confirmed',
-        });
-      }
+      if (onConfirm) onConfirm(savedBooking);
 
       // 3. Show confirmation modal
       setIsSuccessModalVisible(true);
@@ -106,7 +86,7 @@ export default function BookingSummaryScreen({
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#6A1B9A" />
 
       {/* Top Header */}
@@ -265,7 +245,7 @@ export default function BookingSummaryScreen({
           <Text style={styles.navLabel}>Account</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 

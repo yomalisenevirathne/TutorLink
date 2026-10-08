@@ -3,14 +3,14 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert,
 import { apiService } from '../services/api';
 import { pickImageWithPermissions } from '../utils/mediaPicker';
 
-export default function StudentRegistrationScreen({ onRegistrationSuccess, onBack }) {
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [subjects, setSubjects] = useState('');
-  const [aboutYou, setAboutYou] = useState('');
-  const [password, setPassword] = useState('password123');
-  const [avatarUrl, setAvatarUrl] = useState(null);
+export default function StudentRegistrationScreen({ user, onRegistrationSuccess, onBack }) {
+  const [fullName, setFullName] = useState(user?.fullName || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber || '');
+  const [subjects, setSubjects] = useState((user?.subjects || []).join(', '));
+  const [aboutYou, setAboutYou] = useState(user?.aboutYou || '');
+  const password = 'password123';
+  const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || null);
   const [loading, setLoading] = useState(false);
 
   const handlePickPhoto = async () => {
@@ -39,11 +39,13 @@ export default function StudentRegistrationScreen({ onRegistrationSuccess, onBac
         avatarUrl
       };
 
-      const res = await apiService.register(payload);
+      const res = user
+        ? await apiService.updateProfile({ ...payload, password: undefined, email: user.email })
+        : await apiService.register(payload);
       setLoading(false);
 
       if (res && res.success) {
-        Alert.alert('Welcome!', 'Student account created successfully.');
+        Alert.alert(user ? 'Profile Updated' : 'Welcome!', user ? 'Your profile has been saved.' : 'Student account created successfully.');
         if (onRegistrationSuccess) {
           onRegistrationSuccess(res.user);
         }
@@ -63,7 +65,7 @@ export default function StudentRegistrationScreen({ onRegistrationSuccess, onBac
         <View style={styles.logoBadge}>
           <Text style={styles.logoBadgeIcon}>🎓</Text>
         </View>
-        <Text style={styles.headerTitle}>Become a Student</Text>
+        <Text style={styles.headerTitle}>{user ? 'Edit Profile' : 'Become a Student'}</Text>
         <Text style={styles.headerSubtitle}>Join our community of expert educators</Text>
       </View>
 
@@ -104,6 +106,7 @@ export default function StudentRegistrationScreen({ onRegistrationSuccess, onBac
             placeholder="john@example.com"
             placeholderTextColor="#94A3B8"
             value={email}
+            editable={!user}
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
@@ -154,7 +157,7 @@ export default function StudentRegistrationScreen({ onRegistrationSuccess, onBac
         onPress={handleRegister}
         disabled={loading}
       >
-        <Text style={styles.createAccountBtnText}>{loading ? 'Creating Account...' : 'Create Account'}</Text>
+        <Text style={styles.createAccountBtnText}>{loading ? 'Saving...' : user ? 'Save Profile' : 'Create Account'}</Text>
       </TouchableOpacity>
     </ScrollView>
   );

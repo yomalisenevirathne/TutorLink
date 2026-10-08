@@ -1,18 +1,16 @@
 // src/screens/MyBookingsScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { fetchAllBookings, cancelBookingInDb, deleteBookingFromDb } from '../bookingService';
+import { cancelBookingInDb, completeBookingInDb, deleteBookingFromDb } from '../bookingService';
 
 export default function MyBookingsScreen({
   navigation,
@@ -22,34 +20,7 @@ export default function MyBookingsScreen({
   onDeleteBooking,
 }) {
   const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming' or 'past'
-  const [localBookings, setLocalBookings] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  // Sync propBookings with local state if provided
-  useEffect(() => {
-    if (propBookings && propBookings.length > 0) {
-      setLocalBookings(propBookings);
-    } else {
-      loadBookingsFromDb();
-    }
-  }, [propBookings]);
-
-  // Supabase Database fetch
-  const loadBookingsFromDb = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchAllBookings();
-      if (data && data.length > 0) {
-        setLocalBookings(data);
-      }
-    } catch (err) {
-      console.log('Error loading bookings from Supabase:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const bookings = localBookings;
+  const bookings = propBookings ?? [];
 
   // Dynamic Categorization
   const upcomingBookings = bookings.filter((item) => item.status === 'Confirmed');
@@ -82,11 +53,14 @@ export default function MyBookingsScreen({
           text: 'Yes, Cancel',
           style: 'destructive',
           onPress: async () => {
+            const result = await cancelBookingInDb(id);
+            if (!result.success) {
+              Alert.alert('Unable to cancel', result.error?.message || 'Please try again.');
+              return;
+            }
             if (onCancelBooking) {
               onCancelBooking(id);
             }
-            setLocalBookings((prev) => prev.filter((item) => item.id !== id));
-            await cancelBookingInDb(id);
             Alert.alert('Session Cancelled', 'Your booking has been cancelled.');
           },
         },
@@ -103,13 +77,15 @@ export default function MyBookingsScreen({
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Mark Completed',
-          onPress: () => {
+          onPress: async () => {
+            const result = await completeBookingInDb(id);
+            if (!result.success) {
+              Alert.alert('Unable to complete', result.error?.message || 'Please try again.');
+              return;
+            }
             if (onCompleteBooking) {
               onCompleteBooking(id);
             }
-            setLocalBookings((prev) =>
-              prev.map((item) => (item.id === id ? { ...item, status: 'Completed' } : item))
-            );
           },
         },
       ]
@@ -127,11 +103,14 @@ export default function MyBookingsScreen({
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            const result = await deleteBookingFromDb(id);
+            if (!result.success) {
+              Alert.alert('Unable to delete', result.error?.message || 'Please try again.');
+              return;
+            }
             if (onDeleteBooking) {
               onDeleteBooking(id);
             }
-            setLocalBookings((prev) => prev.filter((item) => item.id !== id));
-            await deleteBookingFromDb(id);
             Alert.alert('Deleted', 'Past session record has been permanently removed.');
           },
         },
@@ -141,6 +120,9 @@ export default function MyBookingsScreen({
 
   const handleReschedule = (item) => {
     navigation?.navigate('ScheduleScreen', {
+      rescheduleId: item.id,
+      mode: item.mode,
+      groupSize: item.group_size,
       year: item.year || new Date().getFullYear(),
       month: item.month !== undefined ? item.month : new Date().getMonth(),
       date: item.date || new Date().getDate(),
@@ -149,7 +131,7 @@ export default function MyBookingsScreen({
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#6A1B9A" />
 
       {/* Top Header */}
@@ -196,11 +178,7 @@ export default function MyBookingsScreen({
       </View>
 
       {/* Loading Indicator */}
-      {loading ? (
-        <View style={styles.centerLoading}>
-          <ActivityIndicator size="large" color="#6A1B9A" />
-        </View>
-      ) : activeTab === 'upcoming' ? (
+      {activeTab === 'upcoming' ? (
         /* SCREEN 5: Upcoming Bookings Content */
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {upcomingBookings.length === 0 ? (
@@ -408,7 +386,7 @@ export default function MyBookingsScreen({
           <Text style={styles.navLabel}>Account</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
