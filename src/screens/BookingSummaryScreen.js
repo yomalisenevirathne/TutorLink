@@ -18,6 +18,7 @@ export default function BookingSummaryScreen({
   currentBooking,
   groupPlans,
   onConfirm,
+  onNavigateToPayment,
 }) {
   const [isSuccessModalVisible, setIsSuccessModalVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -187,7 +188,12 @@ export default function BookingSummaryScreen({
         {/* Pay Button */}
         <TouchableOpacity
           style={[styles.payBtn, isSubmitting && { opacity: 0.7 }]}
-          onPress={handlePay}
+          onPress={onNavigateToPayment ? () => onNavigateToPayment({
+            year, month, date, slot,
+            tutorName: 'Sarith Samarakoon',
+            subject: 'Data Structures & Algorithms',
+            sessionFee, platformFee, total,
+          }) : handlePay}
           disabled={isSubmitting}
           activeOpacity={0.85}
         >

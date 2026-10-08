@@ -14,6 +14,7 @@ import EmailVerificationScreen from './src/screens/EmailVerificationScreen';
 import StudentProfileScreen from './src/screens/StudentProfileScreen';
 import TutorProfileScreen from './src/screens/TutorProfileScreen';
 import PaymentHistoryScreen from './src/screens/PaymentHistoryScreen';
+import PaymentScreen from './src/screens/PaymentScreen';
 import { apiService } from './src/services/api';
 
 // --- Yomali's Booking Screens ---
@@ -25,7 +26,7 @@ import MyBookingsScreen from './src/screens/MyBookingsScreen';
 const screenPath = (screen) => ({ pathname: '/[page]', params: { page: screen } });
 const publicScreens = ['loading', 'login', 'selection', 'tutorReg', 'studentReg', 'verifyOtp'];
 const bookingScreens = ['ScheduleScreen', 'SessionPreferencesScreen', 'BookingSummaryScreen', 'MyBookingsScreen'];
-const allScreens = [...publicScreens, ...bookingScreens, 'studentProfile', 'tutorProfile', 'paymentHistory'];
+const allScreens = [...publicScreens, ...bookingScreens, 'studentProfile', 'tutorProfile', 'paymentHistory', 'payment'];
 
 export default function App() {
   const { page = 'loading' } = useLocalSearchParams();
@@ -37,6 +38,7 @@ export default function App() {
     currentBooking, setCurrentBooking, getCapacityForSlot,
   } = useContext(AppContext);
   const isPaymentHistory = currentScreen === 'paymentHistory';
+  const isPaymentScreen = currentScreen === 'payment';
   const isBookingScreen = bookingScreens.includes(currentScreen);
   const accountScreen = currentUser?.role === 'Tutor' ? 'tutorProfile' : 'studentProfile';
   const openAccount = () => setCurrentScreen(accountScreen);
@@ -75,10 +77,10 @@ export default function App() {
 
   return (
       <SafeAreaView
-        style={[styles.safeArea, isPaymentHistory && styles.paymentSafeArea, isBookingScreen && styles.bookingSafeArea]}
-        edges={isPaymentHistory ? ['top', 'left', 'right'] : ['top', 'left', 'right', 'bottom']}
+        style={[styles.safeArea, (isPaymentHistory || isPaymentScreen) && styles.paymentSafeArea, isBookingScreen && styles.bookingSafeArea]}
+        edges={isPaymentHistory || isPaymentScreen ? ['top', 'left', 'right'] : ['top', 'left', 'right', 'bottom']}
       >
-        <StatusBar barStyle={isPaymentHistory || isBookingScreen ? 'light-content' : 'dark-content'} />
+        <StatusBar barStyle={isPaymentHistory || isPaymentScreen || isBookingScreen ? 'light-content' : 'dark-content'} />
 
       <View style={styles.content}>
         {/* Authentication and account flow */}
@@ -170,6 +172,7 @@ export default function App() {
           )}
 
         {isPaymentHistory && <PaymentHistoryScreen key={currentUser?.id} onBackToAccount={openAccount} userId={currentUser?.id} />}
+        {isPaymentScreen && <PaymentScreen key={currentUser.id} booking={currentBooking.checkout} userId={currentUser.id} isDemo={!!currentUser.isDemo} onBack={() => navigation.goBack()} />}
 
         {/* ================= 2. YOMALI'S BOOKING FLOW ================= */}
         {currentScreen === 'ScheduleScreen' && (
@@ -193,6 +196,7 @@ export default function App() {
             navigation={navigation}
             currentBooking={currentBooking}
             onConfirm={handleConfirmBooking}
+            onNavigateToPayment={(checkout) => navigation.navigate('payment', { checkout })}
           />
         )}
 
