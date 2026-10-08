@@ -1,5 +1,6 @@
 import { supabase } from '../utils/supabase';
 import { mapPaymentRecord } from '../data/paymentHistory';
+import { getDemoPaymentHistory } from './demoPayments';
 
 const PAGE_SIZE = 200;
 
@@ -45,6 +46,14 @@ export async function getPaymentHistory(userId, { signal } = {}) {
     }
     if (data.length < PAGE_SIZE) return payments;
   }
+}
+
+export async function getCombinedPaymentHistory(userId, { signal, isDemo = false } = {}) {
+  if (isDemo) return getDemoPaymentHistory(userId, { signal, isDemo });
+  const [payments, demos] = await Promise.all([
+    getPaymentHistory(userId, { signal }), getDemoPaymentHistory(userId, { signal }),
+  ]);
+  return [...payments, ...demos].sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt));
 }
 
 export function paymentHistoryErrorMessage(error) {

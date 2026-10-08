@@ -50,7 +50,7 @@ export function getPaymentSections(payments, search = '', status = 'All') {
 
   [...payments]
     .filter((payment) => {
-      const matchesSearch = `${payment.name} ${formatPaymentAmount(payment)} ${formatPaymentDate(payment.occurredAt)} ${payment.status}`.toLowerCase().includes(query);
+      const matchesSearch = `${payment.name} ${formatPaymentAmount(payment)} ${formatPaymentDate(payment.occurredAt)} ${payment.status} ${payment.reference || ''} ${payment.subject || ''} ${payment.cardLast4 || ''}`.toLowerCase().includes(query);
       return matchesSearch && (status === 'All' || payment.status === status);
     })
     .sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt))

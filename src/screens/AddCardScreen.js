@@ -18,11 +18,10 @@ export default function AddCardScreen({ userId, isDemo, onBack, onSaved }) {
     if (submitting.current) return;
     setError('');
     try {
-      if (isDemo) throw new Error('Sign in with a registered account to save cards. Demo accounts cannot save cards.');
       const metadata = getCardMetadata(form);
       submitting.current = true;
       setBusy(true);
-      const saved = await savePaymentMethod(userId, metadata);
+      const saved = await savePaymentMethod(userId, metadata, { isDemo });
       setForm(emptyForm);
       onSaved(saved);
     } catch (failure) {

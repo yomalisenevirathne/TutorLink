@@ -1,45 +1,57 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, Image, Modal, Pressable, SectionList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, BackHandler, Image, Modal, Pressable, SectionList, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
+import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatPaymentAmount, formatPaymentDate, getPaymentSections } from '../data/paymentHistory';
-import { getPaymentHistory, paymentHistoryErrorMessage } from '../services/payments';
+import { getCombinedPaymentHistory, paymentHistoryErrorMessage } from '../services/payments';
 
 const paymentColors = {
-  Sent: { text: '#FF2929', border: '#FFE2E2' },
-  Received: { text: '#00C83C', border: '#DDF9E7' },
+  Paid: { text: '#22C55E', border: '#E5F9EE' },
+  Refunded: { text: '#FF2929', border: '#FFE2E2' },
   Pending: { text: '#FF7000', border: '#FFE5D4' },
+  Demo: { text: '#22C55E', border: '#E5F9EE' },
 };
-const statuses = ['All', 'Paid', 'Pending', 'Refunded'];
+const statuses = ['All', 'Paid', 'Pending', 'Refunded', 'Demo'];
 const statusColors = {
   Paid: { text: '#00A83C', background: '#EFFBF3' },
   Pending: { text: '#E56A00', background: '#FFF6ED' },
   Refunded: { text: '#FF2929', background: '#FFF1F1' },
+  Demo: { text: '#7100FF', background: '#F6F0FF' },
 };
 
 function PaymentCard({ payment }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const colors = paymentColors[payment.status === 'Pending' ? 'Pending' : payment.status === 'Refunded' ? 'Sent' : payment.direction];
-  const initials = payment.name.split(' ').slice(0, 2).map((part) => part[0]).join('');
+  const [failedImageUrl, setFailedImageUrl] = useState(null);
+  const { width } = useWindowDimensions();
+  const scale = Math.min(1, Math.max(0.4, (width - 52) / 770));
+  const colors = paymentColors[payment.status];
+  const nameParts = payment.name.trim().split(/\s+/);
+  const displayName = nameParts.length > 1 ? `${nameParts[0]} ${nameParts[nameParts.length - 1][0]}` : nameParts[0];
+  const initials = nameParts.slice(0, 2).map((part) => part[0]).join('');
+  const avatarSize = Math.round(112 * scale);
   return (
-    <View style={[styles.card, { borderColor: colors.border }]} accessibilityLabel={`${payment.name}, ${formatPaymentAmount(payment)}, ${payment.status}, ${payment.direction}, ${formatPaymentDate(payment.occurredAt)}`}>
-      <View style={[styles.avatar, { borderColor: colors.border }]}>
-        {payment.avatarUrl && !imageFailed ? (
-          <Image source={{ uri: payment.avatarUrl }} style={styles.avatarImage} onError={() => setImageFailed(true)} />
+    <View style={[styles.card, { borderColor: colors.border, minHeight: Math.max(90, Math.round(158 * scale)), gap: Math.max(12, Math.round(44 * scale)) }]}
+      accessibilityLabel={`${payment.name}, ${formatPaymentAmount(payment)}, ${payment.status}, ${formatPaymentDate(payment.occurredAt)}${payment.reference ? `, ${payment.reference}` : ''}`}>
+      <View style={[styles.avatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]}>
+        {payment.avatarUrl && payment.avatarUrl !== failedImageUrl ? (
+          <Image source={{ uri: payment.avatarUrl }} style={styles.avatarImage} resizeMode="cover"
+            accessibilityLabel={`${payment.name} profile photo`} onError={() => setFailedImageUrl(payment.avatarUrl)} />
         ) : (
           <Text style={styles.initials}>{initials}</Text>
         )}
       </View>
       <View style={styles.cardDetails}>
-        <Text style={styles.name} numberOfLines={1}>{payment.name}</Text>
-        <Text style={styles.date}>{formatPaymentDate(payment.occurredAt)}</Text>
+        <Text style={[styles.name, { fontSize: Math.round(36 * scale) }]} numberOfLines={1}>{displayName}</Text>
+        <Text style={[styles.date, { fontSize: Math.max(10, Math.round(23 * scale)) }]}>{formatPaymentDate(payment.occurredAt)}</Text>
+        {payment.status === 'Demo' && <Text style={styles.demoLabel}>Demo · No money charged</Text>}
       </View>
-      <Text style={[styles.amount, { color: colors.text }]}>{formatPaymentAmount(payment)}</Text>
+      <Text style={[styles.amount, { color: colors.text, fontSize: Math.max(14, Math.round(32 * scale)) }]}
+        numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{formatPaymentAmount(payment)}</Text>
     </View>
   );
 }
 
-export default function PaymentHistoryScreen({ onBackToAccount, userId }) {
+export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo = false }) {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -58,8 +70,8 @@ export default function PaymentHistoryScreen({ onBackToAccount, userId }) {
     const controller = new AbortController();
     const id = request.current.id + 1;
     request.current = { id, controller };
-    return getPaymentHistory(userId, { signal: controller.signal }).then((records) => {
-      if (!controller.signal.aborted && request.current.id === id) setPayments(records);
+    return getCombinedPaymentHistory(userId, { signal: controller.signal, isDemo }).then((records) => {
+      if (!controller.signal.aborted && request.current.id === id) { setPayments(records); setLoadError(''); }
     }).catch((error) => {
       if (!controller.signal.aborted && request.current.id === id) {
         setPayments([]);
@@ -72,7 +84,7 @@ export default function PaymentHistoryScreen({ onBackToAccount, userId }) {
         setRefreshing(false);
       }
     });
-  }, [userId]);
+  }, [userId, isDemo]);
 
   const loadPayments = (refresh = false) => {
     setLoading(!refresh);
@@ -82,18 +94,18 @@ export default function PaymentHistoryScreen({ onBackToAccount, userId }) {
     return fetchPayments();
   };
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     fetchPayments();
     return () => request.current.controller?.abort();
-  }, [fetchPayments]);
+  }, [fetchPayments]));
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       onBackToAccount();
       return true;
     });
     return () => subscription.remove();
-  }, [onBackToAccount]);
+  }, [onBackToAccount]));
 
   const openFilters = () => {
     setDraftStatus(status);
@@ -289,14 +301,15 @@ const styles = StyleSheet.create({
   monthRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 12, marginBottom: 22 },
   monthTitle: { color: '#A3A3A3', fontSize: 13, fontWeight: '600' },
   monthLine: { flex: 1, height: 1, borderTopWidth: 1, borderStyle: 'dashed', borderColor: '#A3A3A3' },
-  card: { minHeight: 65, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderRadius: 5, paddingHorizontal: 9, paddingVertical: 9, marginBottom: 16, boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.04)' },
-  avatar: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, overflow: 'hidden', backgroundColor: '#F3F0FA', alignItems: 'center', justifyContent: 'center' },
+  card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 18, maxWidth: 800, width: '100%', alignSelf: 'center', boxShadow: '0px 2px 6px rgba(34, 197, 94, 0.12)' },
+  avatar: { flexShrink: 0, borderWidth: 1, borderColor: '#86AD95', overflow: 'hidden', backgroundColor: '#F0FAF4', alignItems: 'center', justifyContent: 'center' },
   avatarImage: { width: '100%', height: '100%' },
-  initials: { fontSize: 15, color: '#530096', fontWeight: '600' },
-  cardDetails: { flex: 1, minWidth: 0, marginLeft: 18, marginRight: 6 },
-  name: { fontSize: 14, fontWeight: '700', color: '#080808', marginBottom: 5 },
-  date: { fontSize: 9, fontWeight: '600', color: '#111111' },
-  amount: { fontSize: 12, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  initials: { fontSize: 17, color: '#316C49', fontWeight: '600' },
+  cardDetails: { flex: 1, minWidth: 0 },
+  name: { fontWeight: '700', color: '#080808', marginBottom: 7 },
+  date: { fontWeight: '600', color: '#111111' },
+  demoLabel: { fontSize: 10, color: '#7100FF', fontWeight: '600', marginTop: 5 },
+  amount: { flexShrink: 0, fontWeight: '600', textAlign: 'right', maxWidth: '42%', fontVariant: ['tabular-nums'] },
   sectionFooter: { height: 0 },
   emptyList: { flexGrow: 1 },
   emptyState: { flex: 1, alignItems: 'center', paddingTop: 104, paddingBottom: 24, gap: 9 },

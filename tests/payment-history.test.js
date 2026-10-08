@@ -12,11 +12,13 @@ function loadModule(file, dependencies = {}) {
     plugins: ['@babel/plugin-transform-modules-commonjs'],
   });
   const loaded = { exports: {} };
+  dependencies = { 'react-native': { Platform: { OS: 'web' } }, ...dependencies };
   const requireDependency = (name) => {
     if (!(name in dependencies)) throw new Error(`Unexpected dependency: ${name}`);
     return dependencies[name];
   };
-  new Function('require', 'module', 'exports', code)(requireDependency, loaded, loaded.exports);
+  new Function('require', 'module', 'exports', 'fetch', code)(requireDependency, loaded, loaded.exports,
+    async () => { throw new Error('Local API unavailable in isolated tests'); });
   return loaded.exports;
 }
 
@@ -28,7 +30,7 @@ const row = {
   direction: 'Sent', status: 'Paid', occurred_at: '2026-09-13T16:30:00+05:30',
 };
 
-function paymentService({ rows = [row], error = null, authenticatedId = userId, authError = null } = {}) {
+function paymentService({ rows = [row], error = null, authenticatedId = userId, authError = null, demoRows = [] } = {}) {
   const requests = [];
   const supabase = {
     auth: { getUser: async () => ({ data: { user: authenticatedId ? { id: authenticatedId } : null }, error: authError }) },
@@ -51,6 +53,7 @@ function paymentService({ rows = [row], error = null, authenticatedId = userId, 
   return {
     ...loadModule('src/services/payments.js', {
       '../utils/supabase': { supabase }, '../data/paymentHistory': formatting,
+      './demoPayments': { getDemoPaymentHistory: async () => demoRows },
     }),
     requests,
   };
@@ -169,4 +172,89 @@ test('failed registrations do not create Supabase accounts through demo login', 
   const supabase = { auth: { signUp: async () => ({ data: null, error: new Error('Registration failed') }) } };
   const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase } });
   assert.equal((await apiService.register({ email: 'test@example.com', password: 'test-password' })).success, false);
+});
+
+test('combined history includes saved demos without treating them as Paid transactions', async () => {
+  const demo = { id: 'demo:saved-1', name: 'Test Tutor', amount: 450, currency: 'LKR', status: 'Demo',
+    occurredAt: '2026-10-08T10:00:00Z', direction: 'Sent', reference: 'DEMO-TEST-12345' };
+  const subject = paymentService({ demoRows: [demo] });
+  const history = await subject.getCombinedPaymentHistory(userId);
+  assert.equal(history.length, 2);
+  assert.equal(history[0].status, 'Demo');
+  assert.equal(formatting.getPaymentSections(history, '', 'Paid')[0].data.length, 1);
+  assert.equal(formatting.getPaymentSections(history, 'DEMO-TEST', 'Demo')[0].data[0].amount, 450);
+  const anonymous = paymentService({ authenticatedId: null, demoRows: [demo] });
+  assert.deepEqual(await anonymous.getCombinedPaymentHistory('demo_fake', { isDemo: true }), [demo]);
+  assert.equal(anonymous.requests.length, 0);
+});
+
+test('login prefers the incoming branch database profile over conflicting auth metadata', async () => {
+  const requests = [];
+  const supabase = {
+    auth: { signInWithPassword: async () => ({ data: {
+      user: { id: userId, email: 'test@example.com', user_metadata: { fullName: 'Metadata Name', role: 'Student' } },
+      session: { access_token: 'verified-session' },
+    }, error: null }) },
+    from(table) {
+      const request = { table };
+      requests.push(request);
+      const query = {
+        select: () => query,
+        eq(column, value) { request.filter = [column, value]; return query; },
+        single: async () => ({ data: table === 'profiles'
+          ? { id: userId, role: 'Tutor', email: 'stored@example.com', full_name: 'Stored Tutor', phone_number: '0710000000', is_email_verified: true }
+          : { subjects: ['Database Systems'], experience_level: 'Senior Tutor' }, error: null }),
+      };
+      return query;
+    },
+  };
+  const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase } });
+  const result = await apiService.login('test@example.com', 'test-password');
+  assert.equal(result.user.fullName, 'Stored Tutor');
+  assert.equal(result.user.role, 'Tutor');
+  assert.equal(result.user.email, 'stored@example.com');
+  assert.deepEqual(result.user.subjects, ['Database Systems']);
+  assert.equal(result.token, 'verified-session');
+  assert.deepEqual(requests, [
+    { table: 'profiles', filter: ['id', userId] },
+    { table: 'tutor_profiles', filter: ['user_id', userId] },
+  ]);
+});
+
+test('incoming registration persists the profile, role profile and supplied certificates', async () => {
+  const requests = [];
+  const supabase = {
+    auth: { signUp: async () => ({ data: {
+      user: { id: userId, email: 'test@example.com', user_metadata: { role: 'Tutor' } },
+      session: { access_token: 'verified-session' },
+    }, error: null }) },
+    from(table) { return {
+      upsert: async (data, options) => { requests.push({ table, data, options }); return { error: null }; },
+      insert: async (data) => { requests.push({ table, data }); return { error: null }; },
+    }; },
+  };
+  const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase } });
+  const result = await apiService.register({ email: 'test@example.com', password: 'test-password', role: 'Tutor', fullName: 'New Tutor',
+    subjects: ['Mathematics'], certificates: [{ title: 'Degree', issuingInstitute: 'University', certificateUrl: 'https://example.com/degree.pdf' }] });
+  assert.equal(result.success, true);
+  assert.equal(result.user.id, userId);
+  assert.equal('password' in result.user, false);
+  assert.equal(result.token, 'verified-session');
+  assert.deepEqual(requests.map((request) => request.table), ['profiles', 'tutor_profiles', 'tutor_certificates']);
+  assert.equal(requests[0].data.full_name, 'New Tutor');
+  assert.equal(requests[1].data.user_id, userId);
+  assert.equal(requests[2].data[0].tutor_id, userId);
+});
+
+test('failed incoming profile persistence does not report registration success', async () => {
+  const requests = [];
+  const supabase = {
+    auth: { signUp: async () => ({ data: { user: { id: userId, email: 'test@example.com' } }, error: null }) },
+    from(table) { requests.push(table); return { upsert: async () => ({ error: { message: 'Denied profile write' } }) }; },
+  };
+  const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase } });
+  const result = await apiService.register({ email: 'test@example.com', password: 'test-password', role: 'Student', fullName: 'New Student' });
+  assert.equal(result.success, false);
+  assert.match(result.message, /Profile could not be saved/);
+  assert.deepEqual(requests, ['profiles']);
 });

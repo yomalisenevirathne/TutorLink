@@ -1,17 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Feather from '@expo/vector-icons/Feather';
+import { useFocusEffect } from 'expo-router';
 import { formatPaymentAmount } from '../data/paymentHistory';
 import { getSavedPaymentMethods, savedCardsErrorMessage } from '../services/paymentMethods';
 
 const amountText = (amount) => formatPaymentAmount({ amount, currency: 'LKR' });
 
-export default function PaymentScreen({ booking, userId, isDemo = false, cardsVersion = 0, onBack, onAddCard }) {
+export default function PaymentScreen({ booking, userId, isDemo = false, cardsVersion = 0, onBack, onAddCard, onPay }) {
   const [notice, setNotice] = useState('');
   const [cardsState, setCardsState] = useState(null);
   const [selectedCardId, setSelectedCardId] = useState(null);
   const [reload, setReload] = useState(0);
+  const openingPayment = useRef(false);
+  useFocusEffect(useCallback(() => { openingPayment.current = false; }, []));
   const hasBooking = booking && Number.isFinite(booking.total) && booking.total > 0;
   const cardsLoading = !cardsState || cardsState.userId !== userId || cardsState.reload !== reload
     || cardsState.isDemo !== isDemo || cardsState.hasBooking !== hasBooking || cardsState.cardsVersion !== cardsVersion;
@@ -21,8 +24,8 @@ export default function PaymentScreen({ booking, userId, isDemo = false, cardsVe
 
   useEffect(() => {
     const controller = new AbortController();
-    const request = isDemo || !hasBooking ? Promise.resolve([])
-      : getSavedPaymentMethods(userId, { signal: controller.signal });
+    const request = !hasBooking ? Promise.resolve([])
+      : getSavedPaymentMethods(userId, { signal: controller.signal, isDemo });
     request.then((saved) => {
       if (controller.signal.aborted) return;
       setCardsState({ userId, reload, isDemo, hasBooking, cardsVersion, cards: saved, error: '' });
@@ -48,6 +51,17 @@ export default function PaymentScreen({ booking, userId, isDemo = false, cardsVe
     ['Session Fee', amountText(booking.sessionFee)],
     ...(booking.platformFee > 0 ? [['Platform Fee', amountText(booking.platformFee)]] : []),
   ] : [];
+
+  const handlePay = () => {
+    if (!selectedCard || cardsLoading || cardsError || openingPayment.current) return;
+    try {
+      openingPayment.current = true;
+      onPay(selectedCard);
+    } catch (error) {
+      openingPayment.current = false;
+      setNotice(error.message || 'Could not open payment confirmation. Please try again.');
+    }
+  };
 
   return (
     <SafeAreaView edges={['bottom']} style={styles.screen}>
@@ -115,12 +129,13 @@ export default function PaymentScreen({ booking, userId, isDemo = false, cardsVe
           </ScrollView>
 
           <View style={styles.footer}>
+            <Text style={styles.demoNote}>Demo payment · No money will be charged</Text>
             <TouchableOpacity
               style={[styles.payButton, (!selectedCard || cardsLoading || !!cardsError) && styles.disabledPayButton]}
               disabled={!selectedCard || cardsLoading || !!cardsError}
               accessibilityRole="button"
               accessibilityLabel={`Pay ${amountText(booking.total)}`}
-              onPress={() => setNotice('Online payments are not enabled yet. No payment has been taken.')}
+              onPress={handlePay}
             >
               <Text style={styles.payText}>Pay {amountText(booking.total)}</Text>
             </TouchableOpacity>
@@ -182,6 +197,7 @@ const styles = StyleSheet.create({
   retryText: { fontSize: 13, fontWeight: '600', color: '#7100FF', padding: 7 },
   notice: { fontSize: 13, color: '#572883', lineHeight: 20, backgroundColor: '#F6F0FF', padding: 12, marginTop: 16, borderRadius: 5 },
   footer: { paddingHorizontal: 27, paddingBottom: 22, paddingTop: 12 },
+  demoNote: { color: '#89818D', fontSize: 11, textAlign: 'center', marginBottom: 9 },
   payButton: { backgroundColor: '#530099', borderRadius: 3, paddingVertical: 12, alignItems: 'center' },
   disabledPayButton: { backgroundColor: '#B9ADC4' },
   payText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },

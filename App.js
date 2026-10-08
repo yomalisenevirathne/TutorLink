@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useCallback, useContext } from 'react';
 import { StyleSheet, View, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
@@ -16,6 +16,9 @@ import TutorProfileScreen from './src/screens/TutorProfileScreen';
 import PaymentHistoryScreen from './src/screens/PaymentHistoryScreen';
 import PaymentScreen from './src/screens/PaymentScreen';
 import AddCardScreen from './src/screens/AddCardScreen';
+import PaymentProcessingScreen from './src/screens/PaymentProcessingScreen';
+import PaymentSuccessScreen from './src/screens/PaymentSuccessScreen';
+import { createDemoPaymentReceipt } from './src/data/paymentReceipt';
 import { apiService } from './src/services/api';
 
 // --- Yomali's Booking Screens ---
@@ -27,7 +30,7 @@ import MyBookingsScreen from './src/screens/MyBookingsScreen';
 const screenPath = (screen) => ({ pathname: '/[page]', params: { page: screen } });
 const publicScreens = ['loading', 'login', 'selection', 'tutorReg', 'studentReg', 'verifyOtp'];
 const bookingScreens = ['ScheduleScreen', 'SessionPreferencesScreen', 'BookingSummaryScreen', 'MyBookingsScreen'];
-const allScreens = [...publicScreens, ...bookingScreens, 'studentProfile', 'tutorProfile', 'paymentHistory', 'payment', 'addCard'];
+const allScreens = [...publicScreens, ...bookingScreens, 'studentProfile', 'tutorProfile', 'paymentHistory', 'payment', 'addCard', 'paymentProcessing', 'paymentSuccess'];
 
 export default function App() {
   const { page = 'loading' } = useLocalSearchParams();
@@ -41,10 +44,25 @@ export default function App() {
   const isPaymentHistory = currentScreen === 'paymentHistory';
   const isPaymentScreen = currentScreen === 'payment';
   const isAddCardScreen = currentScreen === 'addCard';
-  const isPaymentArea = isPaymentScreen || isAddCardScreen || isPaymentHistory;
+  const isPaymentProcessing = currentScreen === 'paymentProcessing';
+  const isPaymentSuccess = currentScreen === 'paymentSuccess';
+  const isPaymentArea = isPaymentScreen || isAddCardScreen || isPaymentHistory || isPaymentProcessing || isPaymentSuccess;
+  const paymentReceipt = currentBooking.paymentReceipt;
+  const hasPaymentReceipt = paymentReceipt?.isDemo === true && paymentReceipt.ownerId === currentUser?.id;
+  const finishPaymentDemo = useCallback((saved) => {
+    setCurrentBooking((previous) => ({ ...previous, paymentReceipt: {
+      ...previous.paymentReceipt, paymentId: saved.id,
+    } }));
+    router.replace(screenPath('paymentSuccess'));
+  }, [setCurrentBooking]);
   const isBookingScreen = bookingScreens.includes(currentScreen);
   const accountScreen = currentUser?.role === 'Tutor' ? 'tutorProfile' : 'studentProfile';
   const openAccount = () => setCurrentScreen(accountScreen);
+  const finishPaymentFlow = () => {
+    setCurrentBooking((previous) => ({ ...previous, checkout: undefined, paymentReceipt: undefined }));
+    if (router.canDismiss()) router.dismissAll();
+    setCurrentScreen('paymentHistory');
+  };
   const handleConfirmBooking = (booking) => {
     setMyBookings((previous) => [booking, ...previous.filter((item) => item.id !== booking.id)]);
     setCurrentBooking((previous) => ({ ...previous, rescheduleId: null }));
@@ -77,13 +95,15 @@ export default function App() {
   };
   if (!allScreens.includes(currentScreen)) return <Redirect href={screenPath(currentUser ? accountScreen : 'login')} />;
   if (!currentUser && !publicScreens.includes(currentScreen)) return <Redirect href={screenPath('login')} />;
+  if ((isPaymentProcessing || isPaymentSuccess) && !hasPaymentReceipt) return <Redirect href={screenPath(accountScreen)} />;
+  if (isPaymentSuccess && !paymentReceipt.paymentId) return <Redirect href={screenPath('paymentProcessing')} />;
 
   return (
       <SafeAreaView
-        style={[styles.safeArea, isPaymentArea && styles.paymentSafeArea, isBookingScreen && styles.bookingSafeArea]}
+        style={[styles.safeArea, isPaymentArea && styles.paymentSafeArea, isBookingScreen && styles.bookingSafeArea, isPaymentProcessing && styles.processingSafeArea]}
         edges={isPaymentArea ? ['top', 'left', 'right'] : ['top', 'left', 'right', 'bottom']}
       >
-        <StatusBar barStyle={isPaymentArea || isBookingScreen ? 'light-content' : 'dark-content'} />
+        <StatusBar barStyle={(isPaymentArea && !isPaymentProcessing) || isBookingScreen ? 'light-content' : 'dark-content'} />
 
       <View style={styles.content}>
         {/* Authentication and account flow */}
@@ -174,9 +194,14 @@ export default function App() {
             />
           )}
 
-        {isPaymentHistory && <PaymentHistoryScreen key={currentUser?.id} onBackToAccount={openAccount} userId={currentUser?.id} />}
+        {isPaymentHistory && <PaymentHistoryScreen key={currentUser?.id} onBackToAccount={openAccount} userId={currentUser?.id} isDemo={!!currentUser?.isDemo} />}
         {isPaymentScreen && <PaymentScreen key={currentUser.id} booking={currentBooking.checkout} userId={currentUser.id} isDemo={!!currentUser.isDemo}
-          cardsVersion={currentBooking.cardsVersion || 0} onBack={() => navigation.goBack()} onAddCard={() => navigation.navigate('addCard')} />}
+          cardsVersion={currentBooking.cardsVersion || 0} onBack={() => navigation.goBack()} onAddCard={() => navigation.navigate('addCard')}
+          onPay={(card) => navigation.navigate('paymentProcessing', {
+            paymentReceipt: createDemoPaymentReceipt(currentBooking.checkout, card, currentUser.id),
+          })} />}
+        {isPaymentProcessing && <PaymentProcessingScreen receipt={paymentReceipt} isDemo={!!currentUser.isDemo} onComplete={finishPaymentDemo} onBack={() => navigation.goBack()} />}
+        {isPaymentSuccess && <PaymentSuccessScreen receipt={paymentReceipt} onDone={finishPaymentFlow} />}
         {isAddCardScreen && <AddCardScreen userId={currentUser.id} isDemo={!!currentUser.isDemo} onBack={() => navigation.goBack()}
           onSaved={() => {
             setCurrentBooking((previous) => ({ ...previous, cardsVersion: (previous.cardsVersion || 0) + 1 }));
@@ -229,6 +254,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   paymentSafeArea: { backgroundColor: '#7100FF' },
+  processingSafeArea: { backgroundColor: '#FFFFFF' },
   bookingSafeArea: { backgroundColor: '#6A1B9A' },
   content: {
     flex: 1,
