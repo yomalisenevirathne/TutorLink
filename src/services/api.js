@@ -1,7 +1,11 @@
 import { supabase } from '../utils/supabase';
+import { Platform } from 'react-native';
 
 // Frontend API client service for TutorLink Scope 3 Backend & Supabase Integration
-const API_BASE_URL = 'http://localhost:5000/api';
+const defaultApiBaseUrl = Platform.OS === 'android'
+  ? 'http://192.168.1.6:5000/api'
+  : 'http://localhost:5000/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || defaultApiBaseUrl;
 
 // Export Supabase client for direct usage across components
 export { supabase };
@@ -167,6 +171,16 @@ export const apiService = {
 
   // Return the Supabase identity/session used by protected database queries.
   register: async (registrationData) => {
+    const liveResult = await fetchWithFallback('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(registrationData)
+    });
+    if (liveResult) {
+      mockState.token = liveResult.token;
+      mockState.currentUser = liveResult.user;
+      return liveResult;
+    }
+
     try {
       const { data, error } = await supabase.auth.signUp({
         email: registrationData.email.trim(),
@@ -182,28 +196,127 @@ export const apiService = {
           }
         }
       });
-      if (error) return { success: false, message: error.message };
-      if (!data?.user || !data?.session) {
-        return { success: false, message: 'Please confirm your email, then log in to your account.' };
+      if (error) {
+        return { success: false, message: error.message };
       }
-      const user = appUserFromSupabase(data.user, registrationData);
-      mockState.token = data.session.access_token;
-      mockState.currentUser = user;
-      return { success: true, message: 'Registration successful!', token: mockState.token, user };
-    } catch (error) {
-      return { success: false, message: error.message || 'Unable to register. Please try again.' };
+
+      if (!data?.user) {
+        return { success: false, message: 'Supabase did not return the new user.' };
+      }
+
+      const userId = data.user.id;
+      const { error: profileError } = await supabase.from('profiles').upsert({
+        id: userId,
+        role: registrationData.role,
+        email: registrationData.email,
+        full_name: registrationData.fullName,
+        phone_number: registrationData.phoneNumber || '',
+        avatar_url: registrationData.avatarUrl || undefined,
+        about_you: registrationData.aboutYou || '',
+        is_email_verified: false
+      }, { onConflict: 'id', ignoreDuplicates: true });
+
+      if (profileError) {
+        return { success: false, message: `Profile could not be saved: ${profileError.message}` };
+      }
+
+      const profileTable = registrationData.role === 'Tutor' ? 'tutor_profiles' : 'student_profiles';
+      const roleProfile = registrationData.role === 'Tutor'
+        ? {
+            user_id: userId,
+            subjects: registrationData.subjects || [],
+            experience_level: registrationData.experienceLevel || 'Senior Tutor (4+ years)'
+          }
+        : {
+            user_id: userId,
+            subjects: registrationData.subjects || []
+          };
+      const { error: roleProfileError } = await supabase
+        .from(profileTable)
+        .upsert(roleProfile, { onConflict: 'user_id', ignoreDuplicates: true });
+
+      if (roleProfileError) {
+        return { success: false, message: `Role profile could not be saved: ${roleProfileError.message}` };
+      }
+
+      if (registrationData.role === 'Tutor' && registrationData.certificates?.length) {
+        const { error: certificateError } = await supabase.from('tutor_certificates').insert(
+          registrationData.certificates.map(certificate => ({
+            tutor_id: userId,
+            title: certificate.title,
+            issuing_institute: certificate.issuingInstitute,
+            certificate_url: certificate.certificateUrl,
+            status: certificate.status || 'Pending'
+          }))
+        );
+
+        if (certificateError) {
+          return { success: false, message: `Certificate could not be saved: ${certificateError.message}` };
+        }
+      }
+
+      const newUser = { ...appUserFromSupabase(data.user, registrationData),
+        role: registrationData.role, isEmailVerified: false };
+      mockState.token = data.session?.access_token || null;
+      mockState.currentUser = newUser;
+      return {
+        success: true,
+        message: 'Registration successful!',
+        token: mockState.token,
+        user: newUser
+      };
+    } catch (err) {
+      return { success: false, message: `Registration could not be saved: ${err.message}` };
     }
   },
 
   login: async (email, password) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password
+      });
       if (error || !data?.user || !data?.session) return enterDemoAccount(email);
-      const user = appUserFromSupabase(data.user);
+      let user = appUserFromSupabase(data.user);
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        if (!profileError && profile && profile.id === data.user.id) {
+          const profileTable = profile.role === 'Tutor' ? 'tutor_profiles' : 'student_profiles';
+          const { data: roleProfile } = await supabase
+            .from(profileTable)
+            .select('*')
+            .eq('user_id', data.user.id)
+            .single();
+
+          // Incoming branch's database profile takes precedence over auth metadata.
+          user = {
+            ...user,
+            id: data.user.id,
+            role: profile.role,
+            email: profile.email,
+            fullName: profile.full_name,
+            phoneNumber: profile.phone_number || '',
+            avatarUrl: profile.avatar_url,
+            aboutYou: profile.about_you || '',
+            isEmailVerified: profile.is_email_verified,
+            subjects: roleProfile?.subjects || [],
+            experienceLevel: roleProfile?.experience_level || ''
+          };
+        }
+      } catch (profileFailure) {
+        // Keep the verified identity if profile tables are temporarily unavailable.
+        console.warn('[Supabase Profile] Unable to load profile:', profileFailure.message);
+      }
       mockState.token = data.session.access_token;
       mockState.currentUser = user;
       return { success: true, message: 'Login successful.', token: mockState.token, user };
-    } catch {
+    } catch (err) {
+      console.log('[Supabase Auth] Login fallback:', err.message);
       return enterDemoAccount(email);
     }
   },

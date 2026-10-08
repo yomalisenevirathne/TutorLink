@@ -1,23 +1,35 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
-export default function LoadingScreen({ onFinishLoading, navigation }) {
+export default function LoadingScreen({ onFinishLoading }) {
   const [progress, setProgress] = useState(67);
+  const hasFinishedLoading = useRef(false);
 
   useEffect(() => {
     // Simulate initial loading sequence up to 100%
     let nextProgress = 67;
     const timer = setInterval(() => {
-      nextProgress = Math.min(100, nextProgress + 1);
+      nextProgress = Math.min(nextProgress + 1, 100);
       setProgress(nextProgress);
+
       if (nextProgress === 100) {
         clearInterval(timer);
-        onFinishLoading?.();
+        if (!hasFinishedLoading.current) {
+          hasFinishedLoading.current = true;
+          onFinishLoading?.();
+        }
       }
     }, 40);
 
     return () => clearInterval(timer);
   }, [onFinishLoading]);
+
+  const handleContinue = () => {
+    if (!hasFinishedLoading.current) {
+      hasFinishedLoading.current = true;
+      onFinishLoading?.();
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -45,7 +57,7 @@ export default function LoadingScreen({ onFinishLoading, navigation }) {
       {/* Manual Continue Button */}
       <TouchableOpacity 
         style={styles.skipButton} 
-        onPress={() => onFinishLoading && onFinishLoading()}
+        onPress={handleContinue}
       >
         <Text style={styles.skipButtonText}>Continue to App →</Text>
       </TouchableOpacity>
