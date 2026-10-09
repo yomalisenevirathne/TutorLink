@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, SafeAreaView, StatusBar } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import BottomTabBar from './src/components/BottomTabBar';
 
 // --- Rashmika's Auth & Profile Screens (Original / Untouched) ---
 import LoadingScreen from './src/screens/LoadingScreen';
@@ -19,8 +21,20 @@ import MyBookingsScreen from './src/screens/MyBookingsScreen';
 import ManageSessionScreen from './src/screens/ManageSessionScreen';
 import { fetchAllBookings } from './src/bookingService';
 
+// --- Upeksha's Search Flow ---
+import { HomeScreen as SearchHomeScreen } from './src/features/search/screens/HomeScreen';
+import { SearchScreen } from './src/features/search/screens/SearchScreen';
+import { ResultsScreen } from './src/features/search/screens/ResultsScreen';
+import { CompareScreen } from './src/features/search/screens/CompareScreen';
+import { FavoritesScreen } from './src/features/search/screens/FavoritesScreen';
+import { TutorProfileScreen as SearchTutorProfileScreen } from './src/features/search/screens/TutorProfileScreen';
+import { DiscoveryProvider } from './src/features/search/context/DiscoveryContext';
+
 export default function App() {
+  // Current screen state & History for back navigation
   const [currentScreen, setCurrentScreen] = useState('loading');
+  const [screenHistory, setScreenHistory] = useState(['loading']);
+
   const [currentUser, setCurrentUser] = useState(null);
   const [verificationEmail, setVerificationEmail] = useState('');
   const [demoOtpCode, setDemoOtpCode] = useState('');
@@ -135,195 +149,227 @@ export default function App() {
     setCurrentScreen('login');
   };
 
-  // Global Navigation Controller
+  const isTutorUser = (user = currentUser) => {
+    const roleStr = (user?.role || '').toString().trim().toLowerCase();
+    return roleStr === 'tutor';
+  };
+
+  // Global Unified Navigation Controller
   const navigation = {
     navigate: (screenName, params = {}) => {
       if (params) {
         setCurrentBooking((prev) => ({ ...prev, ...params }));
       }
 
-      // Direct ManageSession access enabled for testing
-      if (screenName === 'ManageSessionScreen') {
+      const isTutor = isTutorUser(currentUser);
+
+      // Role-Based Bookings Navigation
+      if (screenName === 'Bookings') {
+        const target = isTutor ? 'ManageSessionScreen' : 'ScheduleScreen';
+        setScreenHistory((prev) => [...prev, target]);
+        setCurrentScreen(target);
+        return;
+      }
+
+      if (screenName === 'ScheduleScreen' && isTutor && !params?.preview) {
+        setScreenHistory((prev) => [...prev, 'ManageSessionScreen']);
         setCurrentScreen('ManageSessionScreen');
         return;
       }
 
-      if (screenName === 'Bookings' || screenName === 'ScheduleScreen') {
-        setCurrentScreen('ScheduleScreen');
-        return;
-      }
-
-      if (screenName === 'tutorProfile') {
-        setCurrentScreen('tutorProfile');
-        return;
-      }
-
-      if (screenName === 'studentProfile') {
-        setCurrentScreen('studentProfile');
-        return;
-      }
-
+      setScreenHistory((prev) => [...prev, screenName]);
       setCurrentScreen(screenName);
     },
     goBack: () => {
-      if (currentScreen === 'ManageSessionScreen') {
-        setCurrentScreen('ScheduleScreen');
-      } else if (currentScreen === 'ScheduleScreen') {
-        setCurrentScreen('studentProfile');
-      } else if (currentScreen === 'MyBookingsScreen') {
-        setCurrentScreen('ScheduleScreen');
-      } else if (currentScreen === 'BookingSummaryScreen') {
-        setCurrentScreen('SessionPreferencesScreen');
-      } else if (currentScreen === 'SessionPreferencesScreen') {
-        setCurrentScreen('ScheduleScreen');
-      } else if (currentScreen === 'studentProfile') {
-        setCurrentScreen('ScheduleScreen');
-      } else if (currentScreen === 'tutorProfile') {
-        setCurrentScreen('login');
-      }
+      setScreenHistory((prev) => {
+        if (prev.length > 1) {
+          const newHistory = prev.slice(0, -1);
+          const previousScreen = newHistory[newHistory.length - 1];
+          setCurrentScreen(previousScreen);
+          return newHistory;
+        }
+
+        // Fallback default back routes if at the root
+        if (
+          currentScreen === 'SearchScreen' ||
+          currentScreen === 'ResultsScreen' ||
+          currentScreen === 'SearchTutorProfileScreen'
+        ) {
+          setCurrentScreen('SearchHomeScreen');
+        } else if (currentScreen === 'FavoritesScreen' || currentScreen === 'CompareScreen') {
+          setCurrentScreen('SearchHomeScreen');
+        } else if (currentScreen === 'ManageSessionScreen') {
+          setCurrentScreen(isTutorUser(currentUser) ? 'tutorProfile' : 'ScheduleScreen');
+        } else if (currentScreen === 'MyBookingsScreen' || currentScreen === 'SessionPreferencesScreen') {
+          setCurrentScreen('ScheduleScreen');
+        } else if (currentScreen === 'BookingSummaryScreen') {
+          setCurrentScreen('SessionPreferencesScreen');
+        } else if (currentScreen === 'studentProfile') {
+          setCurrentScreen('SearchHomeScreen');
+        } else if (currentScreen === 'tutorProfile') {
+          setCurrentScreen('login');
+        }
+        return ['SearchHomeScreen'];
+      });
     },
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <SafeAreaProvider style={{ flex: 1 }}>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      <View style={styles.content}>
-        {/* ================= 1. RASHMIKA'S FLOW (UNTOUCHED) ================= */}
-        {currentScreen === 'loading' && (
-          <LoadingScreen onFinishLoading={() => setTimeout(() => setCurrentScreen('login'), 0)} />
-        )}
+        <View style={styles.content}>
+          {/* ================= 1. RASHMIKA'S FLOW (UNTOUCHED) ================= */}
+          {currentScreen === 'loading' && (
+            <LoadingScreen onFinishLoading={() => setTimeout(() => setCurrentScreen('login'), 0)} />
+          )}
 
-        {currentScreen === 'login' && (
-          <LoginScreen
-            onLoginSuccess={(user) => {
-              const role = user?.role || user?.user_metadata?.role || 'Student';
-              setCurrentUser({ ...(user || {}), role });
-              if (role.toLowerCase() === 'tutor') {
+          {currentScreen === 'login' && (
+            <LoginScreen
+              onLoginSuccess={(user) => {
+                const role = user?.role || user?.user_metadata?.role || (user?.email?.toLowerCase().includes('tutor') ? 'Tutor' : 'Student');
+                const authUser = { ...(user || {}), role };
+                setCurrentUser(authUser);
+                if (role.toLowerCase() === 'tutor') {
+                  setCurrentScreen('tutorProfile');
+                } else {
+                  setCurrentScreen('SearchHomeScreen');
+                }
+              }}
+              onNavigateToRegister={() => setCurrentScreen('selection')}
+            />
+          )}
+
+          {currentScreen === 'selection' && (
+            <RegisterSelectionScreen
+              onSelectRole={(role) => {
+                const roleStr = (role || '').toString().trim().toLowerCase();
+                if (roleStr === 'tutor') {
+                  setCurrentScreen('tutorReg');
+                } else {
+                  setCurrentScreen('studentReg');
+                }
+              }}
+              onBackToLogin={() => setCurrentScreen('login')}
+            />
+          )}
+
+          {currentScreen === 'tutorReg' && (
+            <TutorRegistrationScreen
+              onNavigateToVerifyOtp={(email, otp) => {
+                setVerificationEmail(email);
+                setDemoOtpCode(otp);
+                setCurrentScreen('verifyOtp');
+              }}
+              onRegistrationSuccess={(user) => {
+                setCurrentUser({ ...(user || {}), role: 'Tutor' });
                 setCurrentScreen('tutorProfile');
-              } else {
-                setCurrentScreen('studentProfile');
-              }
-            }}
-            onNavigateToRegister={() => setCurrentScreen('selection')}
-          />
-        )}
+              }}
+              onBack={() => setCurrentScreen('selection')}
+            />
+          )}
 
-        {currentScreen === 'selection' && (
-          <RegisterSelectionScreen
-            onSelectRole={(role) => {
-              const roleStr = (role || '').toString().trim().toLowerCase();
-              if (roleStr === 'tutor') {
-                setCurrentScreen('tutorReg');
-              } else {
-                setCurrentScreen('studentReg');
-              }
-            }}
-            onBackToLogin={() => setCurrentScreen('login')}
-          />
-        )}
+          {currentScreen === 'studentReg' && (
+            <StudentRegistrationScreen
+              onRegistrationSuccess={(user) => {
+                setCurrentUser({ ...(user || {}), role: 'Student' });
+                setCurrentScreen('SearchHomeScreen');
+              }}
+              onBack={() => setCurrentScreen('selection')}
+            />
+          )}
 
-        {currentScreen === 'tutorReg' && (
-          <TutorRegistrationScreen
-            onNavigateToVerifyOtp={(email, otp) => {
-              setVerificationEmail(email);
-              setDemoOtpCode(otp);
-              setCurrentScreen('verifyOtp');
-            }}
-            onRegistrationSuccess={(user) => {
-              setCurrentUser({ ...(user || {}), role: 'Tutor' });
-              setCurrentScreen('tutorProfile');
-            }}
-            onBack={() => setCurrentScreen('selection')}
-          />
-        )}
+          {currentScreen === 'verifyOtp' && (
+            <EmailVerificationScreen
+              email={verificationEmail}
+              demoOtp={demoOtpCode}
+              onVerificationSuccess={() => setCurrentScreen('SearchHomeScreen')}
+              onBack={() => setCurrentScreen('login')}
+            />
+          )}
 
-        {currentScreen === 'studentReg' && (
-          <StudentRegistrationScreen
-            onRegistrationSuccess={(user) => {
-              setCurrentUser({ ...(user || {}), role: 'Student' });
-              setCurrentScreen('studentProfile');
-            }}
-            onBack={() => setCurrentScreen('selection')}
-          />
-        )}
+          {currentScreen === 'studentProfile' && (
+            <StudentProfileScreen
+              user={currentUser}
+              navigation={navigation}
+              onNavigateToBookings={() => setCurrentScreen('ScheduleScreen')}
+              onEditProfile={() => setCurrentScreen('studentReg')}
+              onLogout={handleLogout}
+            />
+          )}
 
-        {currentScreen === 'verifyOtp' && (
-          <EmailVerificationScreen
-            email={verificationEmail}
-            demoOtp={demoOtpCode}
-            onVerificationSuccess={() => setCurrentScreen('studentProfile')}
-            onBack={() => setCurrentScreen('login')}
-          />
-        )}
+          {currentScreen === 'tutorProfile' && (
+            <TutorProfileScreen
+              user={currentUser}
+              navigation={navigation}
+              onCreateSession={() => setCurrentScreen('ManageSessionScreen')}
+              onNavigateToBookings={() => setCurrentScreen('ManageSessionScreen')}
+              onEditProfile={() => setCurrentScreen('tutorReg')}
+              onLogout={handleLogout}
+            />
+          )}
 
-        {currentScreen === 'studentProfile' && (
-          <StudentProfileScreen
-            user={currentUser}
-            navigation={navigation}
-            onNavigateToBookings={() => setCurrentScreen('ScheduleScreen')}
-            onEditProfile={() => setCurrentScreen('studentReg')}
-            onLogout={handleLogout}
-          />
-        )}
+          {/* ================= 2. YOMALI'S BOOKING & SESSION FLOW ================= */}
+          {currentScreen === 'ManageSessionScreen' && (
+            <ManageSessionScreen
+              navigation={navigation}
+              currentUser={currentUser || { role: 'Tutor', fullName: 'Sarith Samarakoon' }}
+            />
+          )}
 
-        {currentScreen === 'tutorProfile' && (
-          <TutorProfileScreen
-            user={currentUser}
-            navigation={navigation}
-            onCreateSession={() => setCurrentScreen('ManageSessionScreen')}
-            onNavigateToBookings={() => setCurrentScreen('ManageSessionScreen')}
-            onEditProfile={() => setCurrentScreen('tutorReg')}
-            onLogout={handleLogout}
-          />
-        )}
+          {currentScreen === 'ScheduleScreen' && (
+            <ScheduleScreen
+              navigation={navigation}
+              currentBooking={currentBooking}
+              getCapacityForSlot={getCapacityForSlot}
+              currentUser={currentUser}
+            />
+          )}
 
-        {/* ================= 2. YOMALI'S BOOKING & SESSION FLOW ================= */}
-        {/* Tutor Manage Session Screen */}
-        {currentScreen === 'ManageSessionScreen' && (
-          <ManageSessionScreen
-            navigation={navigation}
-            currentUser={currentUser || { role: 'Tutor', fullName: 'Sarith Samarakoon' }}
-          />
-        )}
+          {currentScreen === 'SessionPreferencesScreen' && (
+            <SessionPreferencesScreen
+              navigation={navigation}
+              currentBooking={currentBooking}
+              getCapacityForSlot={getCapacityForSlot}
+            />
+          )}
 
-        {/* Student Schedule Screen */}
-        {currentScreen === 'ScheduleScreen' && (
-          <ScheduleScreen
-            navigation={navigation}
-            currentBooking={currentBooking}
-            getCapacityForSlot={getCapacityForSlot}
-            currentUser={currentUser}
-          />
-        )}
+          {currentScreen === 'BookingSummaryScreen' && (
+            <BookingSummaryScreen
+              navigation={navigation}
+              currentBooking={currentBooking}
+              onConfirm={handleConfirmBooking}
+            />
+          )}
 
-        {currentScreen === 'SessionPreferencesScreen' && (
-          <SessionPreferencesScreen
-            navigation={navigation}
-            currentBooking={currentBooking}
-            getCapacityForSlot={getCapacityForSlot}
-          />
-        )}
+          {currentScreen === 'MyBookingsScreen' && (
+            <MyBookingsScreen
+              navigation={navigation}
+              myBookings={myBookings}
+              onCancelBooking={handleCancelBooking}
+              onCompleteBooking={handleCompleteBooking}
+              onDeleteBooking={handleDeleteBooking}
+            />
+          )}
 
-        {currentScreen === 'BookingSummaryScreen' && (
-          <BookingSummaryScreen
-            navigation={navigation}
-            currentBooking={currentBooking}
-            onConfirm={handleConfirmBooking}
-          />
-        )}
+          {/* ================= 3. UPEKSHA'S SEARCH & DISCOVERY FLOW ================= */}
+          <DiscoveryProvider>
+            {currentScreen === 'SearchHomeScreen' && <SearchHomeScreen navigation={navigation} />}
+            {currentScreen === 'SearchScreen' && <SearchScreen navigation={navigation} />}
+            {currentScreen === 'ResultsScreen' && <ResultsScreen navigation={navigation} />}
+            {currentScreen === 'CompareScreen' && <CompareScreen navigation={navigation} />}
+            {currentScreen === 'FavoritesScreen' && <FavoritesScreen navigation={navigation} />}
+            {currentScreen === 'SearchTutorProfileScreen' && (
+              <SearchTutorProfileScreen navigation={navigation} id={currentBooking?.tutorId} />
+            )}
+          </DiscoveryProvider>
+        </View>
 
-        {currentScreen === 'MyBookingsScreen' && (
-          <MyBookingsScreen
-            navigation={navigation}
-            myBookings={myBookings}
-            onCancelBooking={handleCancelBooking}
-            onCompleteBooking={handleCompleteBooking}
-            onDeleteBooking={handleDeleteBooking}
-          />
-        )}
-      </View>
-    </SafeAreaView>
+        {/* Global Bottom Tab Bar */}
+        <BottomTabBar currentScreen={currentScreen} navigation={navigation} />
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
