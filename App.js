@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, SafeAreaView, StatusBar } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import BottomTabBar from './src/components/BottomTabBar';
 
 // --- Rashmika's Auth & Profile Screens (Original / Untouched) ---
 import LoadingScreen from './src/screens/LoadingScreen';
@@ -18,9 +20,20 @@ import BookingSummaryScreen from './src/screens/BookingSummaryScreen';
 import MyBookingsScreen from './src/screens/MyBookingsScreen';
 import { fetchAllBookings } from './src/bookingService';
 
+
+// --- upeksha's Search Flow ---
+import { HomeScreen as SearchHomeScreen } from './src/features/search/screens/HomeScreen';
+import { SearchScreen } from './src/features/search/screens/SearchScreen';
+import { ResultsScreen } from './src/features/search/screens/ResultsScreen';
+import { CompareScreen } from './src/features/search/screens/CompareScreen';
+import { FavoritesScreen } from './src/features/search/screens/FavoritesScreen';
+import { TutorProfileScreen as SearchTutorProfileScreen } from './src/features/search/screens/TutorProfileScreen';
+import { DiscoveryProvider } from './src/features/search/context/DiscoveryContext';
+
 export default function App() {
   // Current screen state
-  const [currentScreen, setCurrentScreen] = useState('loading');
+  const [currentScreen, setCurrentScreen] = useState('SearchHomeScreen');
+  const [screenHistory, setScreenHistory] = useState(['SearchHomeScreen']);
 
   const [currentUser, setCurrentUser] = useState(null);
   const [verificationEmail, setVerificationEmail] = useState('');
@@ -158,23 +171,37 @@ export default function App() {
       if (params) {
         setCurrentBooking((prev) => ({ ...prev, ...params }));
       }
+      setScreenHistory((prev) => [...prev, screenName]);
       setCurrentScreen(screenName);
     },
     goBack: () => {
-      if (currentScreen === 'MyBookingsScreen') {
-        setCurrentScreen('ScheduleScreen');
-      } else if (currentScreen === 'BookingSummaryScreen') {
-        setCurrentScreen('SessionPreferencesScreen');
-      } else if (currentScreen === 'SessionPreferencesScreen') {
-        setCurrentScreen('ScheduleScreen');
-      } else if (currentScreen === 'studentProfile') {
-        setCurrentScreen('ScheduleScreen');
-      }
+      setScreenHistory((prev) => {
+        if (prev.length > 1) {
+          const newHistory = prev.slice(0, -1);
+          const previousScreen = newHistory[newHistory.length - 1];
+          setCurrentScreen(previousScreen);
+          return newHistory;
+        }
+        // Fallback default back routes if at the root
+        if (currentScreen === 'SearchScreen' || currentScreen === 'ResultsScreen' || currentScreen === 'SearchTutorProfileScreen') {
+          setCurrentScreen('SearchHomeScreen');
+        } else if (currentScreen === 'FavoritesScreen' || currentScreen === 'CompareScreen') {
+          setCurrentScreen('SearchHomeScreen');
+        } else if (currentScreen === 'MyBookingsScreen' || currentScreen === 'SessionPreferencesScreen') {
+          setCurrentScreen('ScheduleScreen');
+        } else if (currentScreen === 'BookingSummaryScreen') {
+          setCurrentScreen('SessionPreferencesScreen');
+        } else if (currentScreen === 'studentProfile') {
+          setCurrentScreen('ScheduleScreen');
+        }
+        return ['SearchHomeScreen'];
+      });
     },
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaProvider style={{ flex: 1 }}>
+      <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       <View style={styles.content}>
@@ -302,8 +329,32 @@ export default function App() {
             onDeleteBooking={handleDeleteBooking}
           />
         )}
+
+        {/* ================= 3. SEARCH FLOW ================= */}
+        <DiscoveryProvider>
+          {currentScreen === 'SearchHomeScreen' && (
+            <SearchHomeScreen navigation={navigation} />
+          )}
+          {currentScreen === 'SearchScreen' && (
+            <SearchScreen navigation={navigation} />
+          )}
+          {currentScreen === 'ResultsScreen' && (
+            <ResultsScreen navigation={navigation} />
+          )}
+          {currentScreen === 'CompareScreen' && (
+            <CompareScreen navigation={navigation} />
+          )}
+          {currentScreen === 'FavoritesScreen' && (
+            <FavoritesScreen navigation={navigation} />
+          )}
+          {currentScreen === 'SearchTutorProfileScreen' && (
+            <SearchTutorProfileScreen navigation={navigation} id={currentBooking.tutorId} />
+          )}
+        </DiscoveryProvider>
       </View>
-    </SafeAreaView>
+      <BottomTabBar currentScreen={currentScreen} navigation={navigation} />
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
