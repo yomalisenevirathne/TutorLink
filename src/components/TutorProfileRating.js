@@ -4,7 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { RatingStars } from '../features/search/components/RatingStars';
 import { fetchTutorRatingSummary } from '../services/tutorRatingSummary';
 
-export default function TutorProfileRating({ tutorId, labelStyle }) {
+export default function TutorProfileRating({ tutorId, labelStyle, onOpenFeedback }) {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
@@ -44,12 +44,14 @@ export default function TutorProfileRating({ tutorId, labelStyle }) {
     <Text style={labelStyle}>Tap to retry</Text>
   </Pressable>;
 
-  return <>
+  return <Pressable style={styles.trigger} onPress={onOpenFeedback} disabled={!onOpenFeedback}
+    accessibilityRole="button" accessibilityLabel="Open tutor feedback: rate or write a review">
     <RatingStars rating={summary?.average || 0} compact size={15} />
     <Text style={labelStyle}>{summary?.total || 0} {summary?.total === 1 ? 'review' : 'reviews'}</Text>
-  </>;
+  </Pressable>;
 }
 
 const styles = StyleSheet.create({
+  trigger: { minHeight: 44, width: '100%', alignItems: 'center', justifyContent: 'center', gap: 4 },
   retry: { minHeight: 44, alignItems: 'center', justifyContent: 'center', gap: 4 },
 });

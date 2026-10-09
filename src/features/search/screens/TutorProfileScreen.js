@@ -1,13 +1,17 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
+import { router } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, shadow } from '../../../constants/colors';
 import { supabase } from '../../../utils/supabase';
 import { Avatar } from '../components/Avatar';
 import { Chip } from '../components/Chip';
-import { RatingStars } from '../components/RatingStars';
 import TutorProfileRating from '../../../components/TutorProfileRating';
+import TutorProfileReviews from '../../../components/TutorProfileReviews';
+import TutorFeedbackDrawer from '../../../components/TutorFeedbackDrawer';
+import { AppContext } from '../../../context/AppContext';
+import { normalizeFeedbackTutor } from '../../../services/tutors';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { useDiscovery } from '../context/DiscoveryContext';
 import { formatRate } from '../utils/filters';
@@ -20,8 +24,14 @@ const nextAvailableSlot = (tutor) => {
 /** Screen — full Tutor Profile, reached from "View Profile" on a tutor card. */
 export function TutorProfileScreen({ id, navigation }) {
     const [tutor, setTutor] = useState(null);
-    const [reviews, setReviews] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [feedbackTutorId, setFeedbackTutorId] = useState(null);
+    const [feedbackVersion, setFeedbackVersion] = useState(0);
+    const { currentUser } = useContext(AppContext);
+    const closeFeedback = useCallback(() => {
+        setFeedbackTutorId(null);
+        setFeedbackVersion(version => version + 1);
+    }, []);
     const { favoriteIds, toggleFavorite } = useDiscovery();
 
     useEffect(() => {
@@ -39,14 +49,6 @@ export function TutorProfileScreen({ id, navigation }) {
                     throw tutorError;
                 setTutor(tutorData);
 
-                const { data: reviewsData, error: reviewsError } = await supabase
-                    .from('reviews')
-                    .select('*')
-                    .eq('tutor_id', id)
-                    .limit(5);
-                if (!reviewsError && reviewsData) {
-                    setReviews(reviewsData);
-                }
             }
             catch (err) {
                 console.error('Error fetching tutor details:', err);
@@ -76,6 +78,8 @@ export function TutorProfileScreen({ id, navigation }) {
     }
 
     const saved = favoriteIds && favoriteIds.includes(tutor.id);
+    const openFeedback = () => setFeedbackTutorId(tutor.id);
+    const feedbackKey = `${tutor.id}:${feedbackVersion}`;
 
     return (<SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
@@ -98,7 +102,8 @@ export function TutorProfileScreen({ id, navigation }) {
 
         <View style={styles.stats}>
           <View style={styles.statCol}>
-            <TutorProfileRating key={tutor.id} tutorId={tutor.id} labelStyle={styles.statLabel}/>
+            <TutorProfileRating key={feedbackKey} tutorId={tutor.id} labelStyle={styles.statLabel}
+              onOpenFeedback={openFeedback}/>
           </View>
           <View style={styles.statDivider}/>
           <View style={styles.statCol}>
@@ -128,14 +133,8 @@ export function TutorProfileScreen({ id, navigation }) {
             </View>
           </View>)}
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Reviews</Text>
-          {reviews.length === 0 ? (<Text style={styles.meta}>No reviews yet</Text>) : (reviews.map((r, i) => (<View key={i} style={[styles.review, i > 0 && styles.reviewDivider]}>
-                <RatingStars rating={r.rating} compact size={13}/>
-                <Text style={styles.reviewQuote}>&ldquo;{r.quote}&rdquo;</Text>
-                <Text style={styles.reviewerName}>{r.reviewerName}</Text>
-              </View>)))}
-        </View>
+        <TutorProfileReviews key={feedbackKey} tutorId={tutor.id} styles={styles}
+          onOpenFeedback={openFeedback}/>
       </ScrollView>
 
       <View style={styles.footer}>
@@ -158,6 +157,11 @@ export function TutorProfileScreen({ id, navigation }) {
           <Text style={styles.primaryText}>Book Session</Text>
         </Pressable>
       </View>
+      {feedbackTutorId === tutor.id && <TutorFeedbackDrawer key={tutor.id}
+        tutor={normalizeFeedbackTutor(tutor)} user={currentUser} onClose={closeFeedback}
+        onViewComments={(tutorId) => router.push({
+          pathname: '/[page]', params: { page: 'feedbackComments', tutorId },
+        })}/>}
     </SafeAreaView>);
 }
 

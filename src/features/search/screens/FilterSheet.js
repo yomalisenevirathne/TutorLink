@@ -23,17 +23,21 @@ const RATINGS = [4.5, 4.0, 3.5, 3.0];
 const LANGUAGES = ['English', 'Sinhala', 'Tamil'];
 const MODES = ['online', 'physical', 'hybrid'];
 
-export function FilterSheet({ initialSection, onClose }) {
+export function FilterSheet({ initialSection, onClose, feedbackTutors, feedbackReady = true }) {
     const insets = useSafeAreaInsets();
     const { filters, setFilters, query } = useDiscovery();
     const [draft, setDraft] = useState(filters || DEFAULT_FILTERS);
     const [atBottom, setAtBottom] = useState(false);
-    const [previewCount, setPreviewCount] = useState(0);
+    const [fetchedPreviewCount, setPreviewCount] = useState(0);
+    const previewCount = Array.isArray(feedbackTutors)
+        ? (feedbackReady ? applyFilters(feedbackTutors, query, draft).length : null)
+        : fetchedPreviewCount;
     const scrollRef = useRef(null);
     const sectionY = useRef({});
     const update = (patch) => setDraft((d) => ({ ...(d || DEFAULT_FILTERS), ...patch }));
 
     useEffect(() => {
+        if (Array.isArray(feedbackTutors)) return;
         async function fetchCount() {
             try {
                 const { data, error } = await supabase.from('tutors').select('*');
@@ -63,7 +67,7 @@ export function FilterSheet({ initialSection, onClose }) {
             }
         }
         fetchCount();
-    }, [draft, query]);
+    }, [draft, query, feedbackTutors]);
 
     const scrollToInitial = () => {
         const y = initialSection ? sectionY.current[initialSection] : undefined;
@@ -185,7 +189,7 @@ export function FilterSheet({ initialSection, onClose }) {
             onClose();
         }} accessibilityRole="button">
               <Text style={styles.applyText}>
-                Apply Filters · {previewCount} tutor{previewCount === 1 ? '' : 's'}
+                Apply Filters{previewCount !== null ? ` · ${previewCount} tutor${previewCount === 1 ? '' : 's'}` : ''}
               </Text>
             </Pressable>
           </View>
