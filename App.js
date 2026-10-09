@@ -33,10 +33,10 @@ import BookingSummaryScreen from './src/screens/BookingSummaryScreen';
 import MyBookingsScreen from './src/screens/MyBookingsScreen';
 // `screen` is reserved by Expo Router/React Navigation; use `page` for our route.
 const screenPath = (screen) => ({ pathname: '/[page]', params: { page: screen } });
-const publicScreens = ['loading', 'login', 'selection', 'tutorReg', 'studentReg', 'verifyOtp'];
-const bookingScreens = ['ScheduleScreen', 'SessionPreferencesScreen', 'BookingSummaryScreen', 'MyBookingsScreen'];
 const searchScreens = ['SearchHomeScreen', 'SearchScreen', 'ResultsScreen', 'CompareScreen', 'FavoritesScreen', 'SearchTutorProfileScreen'];
-const allScreens = [...publicScreens, ...bookingScreens, ...searchScreens, 'studentProfile', 'tutorProfile', 'testingfeedback', 'feedbackComments', 'paymentHistory', 'payment', 'addCard', 'editCard', 'paymentProcessing', 'paymentSuccess', 'managePayments'];
+const publicScreens = ['loading', 'login', 'selection', 'tutorReg', 'studentReg', 'verifyOtp', ...searchScreens];
+const bookingScreens = ['ScheduleScreen', 'SessionPreferencesScreen', 'BookingSummaryScreen', 'MyBookingsScreen'];
+const allScreens = [...publicScreens, ...bookingScreens, 'studentProfile', 'tutorProfile', 'testingfeedback', 'feedbackComments', 'paymentHistory', 'payment', 'addCard', 'editCard', 'paymentProcessing', 'paymentSuccess', 'managePayments'];
 
 
 // --- upeksha's Search Flow ---
@@ -48,7 +48,7 @@ import { FavoritesScreen } from './src/features/search/screens/FavoritesScreen';
 import { TutorProfileScreen as SearchTutorProfileScreen } from './src/features/search/screens/TutorProfileScreen';
 
 export default function App() {
-  const { page = 'loading', tutorId } = useLocalSearchParams();
+  const { page = 'SearchHomeScreen', tutorId } = useLocalSearchParams();
   const currentScreen = typeof page === 'string' ? page : page[0];
   const setCurrentScreen = (next) => router.replace(screenPath(next));
   const {
@@ -300,7 +300,7 @@ export default function App() {
             <SearchTutorProfileScreen navigation={navigation} id={currentBooking.tutorId} />
           )}
       </View>
-      <BottomTabBar currentScreen={currentScreen} navigation={navigation} accountScreen={accountScreen} />
+      <BottomTabBar currentScreen={currentScreen} navigation={navigation} accountScreen={accountScreen} includeBottomInset={isPaymentArea} />
       </SafeAreaView>
   );
 }

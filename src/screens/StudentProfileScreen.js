@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, Image, TouchableOpacity, Switch, ScrollView, Al
 
 export default function StudentProfileScreen({ user, onEditProfile, onLogout, navigation, onNavigateToBookings, onNavigateToPayments }) {
   const [privacyEnabled, setPrivacyEnabled] = useState(user?.privacyEnabled || false);
-  const [activeTab, setActiveTab] = useState('Account');
 
   const studentName = user?.fullName || 'User Profile';
   const avatarUrl = user?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';

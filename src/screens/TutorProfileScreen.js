@@ -5,7 +5,6 @@ import { pickQualificationDocument } from '../utils/mediaPicker';
 export default function TutorProfileScreen({ user, onEditProfile, onCreateSession, onLogout, onNavigateToPayments }) {
   const [notifications, setNotifications] = useState(user?.preferences?.notifications ?? true);
   const [privacy, setPrivacy] = useState(user?.preferences?.privacy ?? false);
-  const [activeTab, setActiveTab] = useState('Account');
 
   const tutorName = user?.fullName || 'Tutor Profile';
   const email = user?.email || 'N/A';

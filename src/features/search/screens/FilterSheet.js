@@ -24,12 +24,7 @@ const LANGUAGES = ['English', 'Sinhala', 'Tamil'];
 const MODES = ['online', 'physical', 'hybrid'];
 
 export function FilterSheet({ initialSection, onClose }) {
-    let insets = { top: 0, bottom: 0, left: 0, right: 0 };
-    try {
-        insets = useSafeAreaInsets();
-    } catch {
-        insets = { top: 0, bottom: 0, left: 0, right: 0 };
-    }
+    const insets = useSafeAreaInsets();
     const { filters, setFilters, query } = useDiscovery();
     const [draft, setDraft] = useState(filters || DEFAULT_FILTERS);
     const [atBottom, setAtBottom] = useState(false);

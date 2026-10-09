@@ -237,35 +237,6 @@ export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo =
         </TouchableOpacity>
       )}
 
-      <SafeAreaView edges={['bottom']} style={styles.bottomSafeArea}>
-        <View style={styles.bottomTabBar}>
-          <TouchableOpacity style={styles.tabItem} onPress={onBackToAccount} accessibilityRole="button" accessibilityLabel="Home">
-            <Text style={styles.tabIcon}>🏠</Text>
-            <Text style={styles.tabLabel}>Home</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.tabItem} disabled accessibilityRole="button" accessibilityLabel="Bookings" accessibilityState={{ disabled: true }}>
-            <Text style={styles.tabIcon}>📅</Text>
-            <Text style={styles.tabLabel}>Bookings</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.tabItem} disabled accessibilityRole="button" accessibilityLabel="Messages" accessibilityState={{ disabled: true }}>
-            <Text style={styles.tabIcon}>💬</Text>
-            <Text style={styles.tabLabel}>Messages</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.tabItem} accessibilityRole="tab" accessibilityLabel="Payments" accessibilityState={{ selected: true }}>
-            <Text style={styles.tabIcon}>💳</Text>
-            <Text style={[styles.tabLabel, styles.tabLabelActive]}>Payments</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.tabItem} onPress={onBackToAccount} accessibilityRole="button" accessibilityLabel="Account">
-            <Text style={styles.tabIcon}>👤</Text>
-            <Text style={styles.tabLabel}>Account</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-
       {settingsVisible && <PaymentSettingsDrawer userId={userId} isDemo={isDemo} cardsVersion={cardsVersion}
         onClose={() => setSettingsVisible(false)}
         onManagePayments={() => { setSettingsVisible(false); onManagePayments(); }}
@@ -301,12 +272,6 @@ export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo =
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#FFFFFF' },
   loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  bottomSafeArea: { backgroundColor: '#FFFFFF' },
-  bottomTabBar: { height: 65, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E2E8F0', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
-  tabItem: { alignItems: 'center', justifyContent: 'center' },
-  tabIcon: { fontSize: 18, marginBottom: 2 },
-  tabLabel: { fontSize: 10, color: '#64748B', fontWeight: '500' },
-  tabLabelActive: { color: '#7C3AED', fontWeight: '700' },
   header: { minHeight: 70, backgroundColor: '#7100FF', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, gap: 12 },
   title: { flex: 1, color: '#FFFFFF', fontSize: 21, fontWeight: '700' },
   headerActionButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },

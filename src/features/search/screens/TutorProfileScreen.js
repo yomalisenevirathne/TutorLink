@@ -24,10 +24,7 @@ export function TutorProfileScreen({ id, navigation }) {
     const { favoriteIds, toggleFavorite } = useDiscovery();
 
     useEffect(() => {
-        if (!id) {
-            setLoading(false);
-            return;
-        }
+        if (!id) return;
 
         async function fetchTutorDetails() {
             try {
@@ -61,14 +58,14 @@ export function TutorProfileScreen({ id, navigation }) {
         fetchTutorDetails();
     }, [id]);
 
-    if (loading) {
+    if (id && loading) {
         return (<SafeAreaView style={[styles.safe, styles.center]}>
         <ActivityIndicator size="large" color={colors.primary}/>
         <Text style={styles.meta}>Loading profile...</Text>
       </SafeAreaView>);
     }
 
-    if (!tutor) {
+    if (!id || !tutor) {
         return (<SafeAreaView style={[styles.safe, styles.center]}>
         <Text style={styles.name}>Tutor not found</Text>
         <Pressable onPress={() => navigation?.goBack()}>

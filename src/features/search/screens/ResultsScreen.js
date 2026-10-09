@@ -21,12 +21,7 @@ import { FilterSheet } from './FilterSheet';
 const SORT_SHORT = { recommended: undefined, priceAsc: 'Price ↑', ratingDesc: 'Rating ↓' };
 
 export function ResultsScreen({ navigation }) {
-    let insets = { top: 0, bottom: 0, left: 0, right: 0 };
-    try {
-        insets = useSafeAreaInsets();
-    } catch {
-        insets = { top: 0, bottom: 0, left: 0, right: 0 };
-    }
+    const insets = useSafeAreaInsets();
     const {
         query,
         submitSearch,

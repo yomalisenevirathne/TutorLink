@@ -1,8 +1,11 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export default function BottomTabBar({ currentScreen, navigation }) {
+export default function BottomTabBar({ currentScreen, navigation, accountScreen = 'studentProfile', includeBottomInset = false }) {
+  const insets = useSafeAreaInsets();
+  const bottomInset = includeBottomInset ? insets.bottom : 0;
   // Login / Register screens වල Bottom Bar එක පෙන්වන්නේ නෑ
   const hideScreens = ['loading', 'login', 'selection', 'tutorReg', 'studentReg', 'verifyOtp'];
   if (hideScreens.includes(currentScreen)) {
@@ -38,20 +41,20 @@ export default function BottomTabBar({ currentScreen, navigation }) {
       name: 'Payments',
       iconOutline: 'wallet-outline',
       iconFilled: 'wallet',
-      target: 'ScheduleScreen',
-      isActive: false,
+      target: 'paymentHistory',
+      isActive: ['paymentHistory', 'payment', 'addCard', 'editCard', 'managePayments', 'paymentProcessing', 'paymentSuccess'].includes(currentScreen),
     },
     {
       name: 'Account',
       iconOutline: 'person-outline',
       iconFilled: 'person',
-      target: 'studentProfile',
+      target: accountScreen,
       isActive: currentScreen === 'studentProfile' || currentScreen === 'tutorProfile',
     },
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { height: 64 + bottomInset, paddingBottom: 6 + bottomInset }]}>
       {tabs.map((tab) => {
         const color = tab.isActive ? activeColor : inactiveColor;
         const iconName = tab.isActive ? tab.iconFilled : tab.iconOutline;
