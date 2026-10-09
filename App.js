@@ -14,6 +14,7 @@ import EmailVerificationScreen from './src/screens/EmailVerificationScreen';
 import StudentProfileScreen from './src/screens/StudentProfileScreen';
 import TutorProfileScreen from './src/screens/TutorProfileScreen';
 import TestingFeedbackScreen from './src/screens/testingfeedback';
+import FeedbackCommentsScreen from './src/screens/FeedbackCommentsScreen';
 import PaymentHistoryScreen from './src/screens/PaymentHistoryScreen';
 import PaymentScreen from './src/screens/PaymentScreen';
 import AddCardScreen from './src/screens/AddCardScreen';
@@ -33,10 +34,10 @@ import MyBookingsScreen from './src/screens/MyBookingsScreen';
 const screenPath = (screen) => ({ pathname: '/[page]', params: { page: screen } });
 const publicScreens = ['loading', 'login', 'selection', 'tutorReg', 'studentReg', 'verifyOtp'];
 const bookingScreens = ['ScheduleScreen', 'SessionPreferencesScreen', 'BookingSummaryScreen', 'MyBookingsScreen'];
-const allScreens = [...publicScreens, ...bookingScreens, 'studentProfile', 'tutorProfile', 'testingfeedback', 'paymentHistory', 'payment', 'addCard', 'editCard', 'paymentProcessing', 'paymentSuccess', 'managePayments'];
+const allScreens = [...publicScreens, ...bookingScreens, 'studentProfile', 'tutorProfile', 'testingfeedback', 'feedbackComments', 'paymentHistory', 'payment', 'addCard', 'editCard', 'paymentProcessing', 'paymentSuccess', 'managePayments'];
 
 export default function App() {
-  const { page = 'loading' } = useLocalSearchParams();
+  const { page = 'loading', tutorId } = useLocalSearchParams();
   const currentScreen = typeof page === 'string' ? page : page[0];
   const setCurrentScreen = (next) => router.replace(screenPath(next));
   const {
@@ -46,6 +47,8 @@ export default function App() {
   } = useContext(AppContext);
   const isPaymentHistory = currentScreen === 'paymentHistory';
   const isTestingFeedback = currentScreen === 'testingfeedback';
+  const isFeedbackComments = currentScreen === 'feedbackComments';
+  const isFeedbackArea = isTestingFeedback || isFeedbackComments;
   const isPaymentScreen = currentScreen === 'payment';
   const isAddCardScreen = currentScreen === 'addCard';
   const isPaymentProcessing = currentScreen === 'paymentProcessing';
@@ -109,10 +112,10 @@ export default function App() {
 
   return (
       <SafeAreaView
-        style={[styles.safeArea, (isPaymentArea || isTestingFeedback) && styles.paymentSafeArea, isBookingScreen && styles.bookingSafeArea, isPaymentProcessing && styles.processingSafeArea]}
+        style={[styles.safeArea, (isPaymentArea || isFeedbackArea) && styles.paymentSafeArea, isBookingScreen && styles.bookingSafeArea, isPaymentProcessing && styles.processingSafeArea]}
         edges={isPaymentArea ? ['top', 'left', 'right'] : ['top', 'left', 'right', 'bottom']}
       >
-        <StatusBar barStyle={(isPaymentArea && !isPaymentProcessing) || isBookingScreen || isTestingFeedback ? 'light-content' : 'dark-content'} />
+        <StatusBar barStyle={(isPaymentArea && !isPaymentProcessing) || isBookingScreen || isFeedbackArea ? 'light-content' : 'dark-content'} />
 
       <View style={styles.content}>
         {/* Authentication and account flow */}
@@ -204,6 +207,8 @@ export default function App() {
           )}
 
         {isTestingFeedback && <TestingFeedbackScreen onBack={navigation.goBack} />}
+        {isFeedbackComments && <FeedbackCommentsScreen key={typeof tutorId === 'string' ? tutorId : tutorId?.[0]}
+          tutorId={typeof tutorId === 'string' ? tutorId : tutorId?.[0]} user={currentUser} onBack={navigation.goBack} />}
         {isPaymentHistory && <PaymentHistoryScreen key={currentUser?.id} onBackToAccount={openAccount} userId={currentUser?.id} isDemo={!!currentUser?.isDemo}
           onStarPress={() => navigation.navigate('testingfeedback')}
           cardsVersion={currentBooking.cardsVersion || 0} onManagePayments={() => navigation.navigate('managePayments')}

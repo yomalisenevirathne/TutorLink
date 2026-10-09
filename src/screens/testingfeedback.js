@@ -1,16 +1,19 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useContext, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { fetchAllTutors } from '../services/tutors';
+import { AppContext } from '../context/AppContext';
+import TutorFeedbackDrawer from '../components/TutorFeedbackDrawer';
 
-function TutorCard({ tutor }) {
+function TutorCard({ tutor, onPress }) {
   const [failedImageUrl, setFailedImageUrl] = useState(null);
   const name = tutor.fullName || 'Tutor';
   const initials = name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('');
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity style={styles.card} onPress={onPress} accessibilityRole="button"
+      accessibilityLabel={`View feedback and comments for ${name}`}>
       <View style={styles.cardHeader}>
         <View style={styles.avatar}>
           {tutor.avatarUrl && tutor.avatarUrl !== failedImageUrl ? (
@@ -28,11 +31,19 @@ function TutorCard({ tutor }) {
       </Text>
       {!!tutor.experienceLevel && <Text style={styles.experience}>{tutor.experienceLevel}</Text>}
       {!!tutor.aboutYou && <Text style={styles.bio}>{tutor.aboutYou}</Text>}
-    </View>
+      <View style={styles.feedbackLink}>
+        <Feather name="star" size={16} color="#6500FF" />
+        <Text style={styles.feedbackLinkText}>Feedback &amp; comments</Text>
+        <Feather name="chevron-right" size={17} color="#6500FF" />
+      </View>
+    </TouchableOpacity>
   );
 }
 
 export default function TestingFeedbackScreen({ onBack }) {
+  const { currentUser } = useContext(AppContext);
+  const [selectedTutor, setSelectedTutor] = useState(null);
+  const closeFeedback = useCallback(() => setSelectedTutor(null), []);
   const [tutors, setTutors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -91,7 +102,7 @@ export default function TestingFeedbackScreen({ onBack }) {
         </View>
       ) : (
         <FlatList data={tutors} keyExtractor={(tutor) => tutor.id}
-          renderItem={({ item }) => <TutorCard tutor={item} />}
+          renderItem={({ item }) => <TutorCard tutor={item} onPress={() => setSelectedTutor(item)} />}
           contentContainerStyle={styles.listContent}
           refreshing={refreshing} onRefresh={() => loadTutors(true)}
           ListHeaderComponent={<Text style={styles.listTitle}>All tutors ({tutors.length})</Text>}
@@ -102,6 +113,10 @@ export default function TestingFeedbackScreen({ onBack }) {
             </View>
           )} />
       )}
+      {selectedTutor && <TutorFeedbackDrawer key={selectedTutor.id} tutor={selectedTutor} user={currentUser}
+        onClose={closeFeedback} onViewComments={(tutorId) => router.push({
+          pathname: '/[page]', params: { page: 'feedbackComments', tutorId },
+        })} />}
     </View>
   );
 }
@@ -124,6 +139,8 @@ const styles = StyleSheet.create({
   subjects: { fontSize: 14, fontWeight: '600', color: '#6D28D9', marginTop: 14, lineHeight: 21 },
   experience: { fontSize: 13, color: '#475569', marginTop: 6 },
   bio: { fontSize: 13, color: '#64748B', lineHeight: 20, marginTop: 10 },
+  feedbackLink: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 14, marginTop: 12, borderTopWidth: 1, borderColor: '#F0E8FC' },
+  feedbackLinkText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#6500FF' },
   state: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 },
   stateText: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 22 },
   retryButton: { minHeight: 44, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 12, backgroundColor: '#7100FF' },
