@@ -418,39 +418,6 @@ export default function SessionPreferencesScreen({
           <Text style={styles.continueBtnText}>Continue</Text>
         </TouchableOpacity>
       </ScrollView>
-
-      {/* Bottom Nav */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation?.navigate('ScheduleScreen')}
-        >
-          <Ionicons name="home-outline" size={22} color="#1F2937" />
-          <Text style={styles.navLabel}>Home</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation?.navigate('MyBookingsScreen')}
-        >
-          <Ionicons name="calendar" size={22} color="#D48B06" />
-          <Text style={[styles.navLabel, { color: '#D48B06' }]}>Bookings</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="chatbubble-outline" size={22} color="#1F2937" />
-          <Text style={styles.navLabel}>Messages</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="wallet-outline" size={22} color="#1F2937" />
-          <Text style={styles.navLabel}>Payments</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation?.navigate('studentProfile')}
-        >
-          <Ionicons name="person-outline" size={22} color="#1F2937" />
-          <Text style={styles.navLabel}>Account</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }

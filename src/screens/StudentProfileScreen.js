@@ -80,43 +80,6 @@ export default function StudentProfileScreen({ user, onEditProfile, onLogout, na
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Bottom Navigation Bar */}
-      <View style={styles.bottomTabBar}>
-        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('Home')}>
-          <Text style={styles.tabIcon}>🏠</Text>
-          <Text style={[styles.tabLabel, activeTab === 'Home' && styles.tabLabelActive]}>Home</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.tabItem}
-          onPress={() => {
-            setActiveTab('Bookings');
-            if (onNavigateToBookings) {
-              onNavigateToBookings();
-            } else if (navigation?.navigate) {
-              navigation.navigate('ScheduleScreen');
-            }
-          }}
-        >
-          <Text style={styles.tabIcon}>📅</Text>
-          <Text style={[styles.tabLabel, activeTab === 'Bookings' && styles.tabLabelActive]}>Bookings</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('Messages')}>
-          <Text style={styles.tabIcon}>💬</Text>
-          <Text style={[styles.tabLabel, activeTab === 'Messages' && styles.tabLabelActive]}>Messages</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('Payments')}>
-          <Text style={styles.tabIcon}>💳</Text>
-          <Text style={[styles.tabLabel, activeTab === 'Payments' && styles.tabLabelActive]}>Payments</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('Account')}>
-          <Text style={styles.tabIcon}>👤</Text>
-          <Text style={[styles.tabLabel, activeTab === 'Account' && styles.tabLabelActive]}>Account</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
