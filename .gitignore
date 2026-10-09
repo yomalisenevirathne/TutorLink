@@ -4,3 +4,7 @@ dist/
 web-build/
 backend/data.json
 *.log
+AGENTS.md
+FEEDBACK_SETUP.md
+CARD_SETUP
+CARD_SETUP.md
