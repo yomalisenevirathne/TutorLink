@@ -23,7 +23,8 @@ function TutorCard({ tutor, onPress }) {
         </View>
         <View style={styles.details}>
           <Text style={styles.name}>{name}</Text>
-          {!!tutor.email && <Text style={styles.email}>{tutor.email}</Text>}
+          {!!tutor.university && <Text style={styles.university}>{tutor.university}</Text>}
+          {tutor.verifiedStatus === 'verified' && <Text style={styles.verified}>Verified tutor</Text>}
         </View>
       </View>
       <Text style={styles.subjects}>
@@ -135,7 +136,8 @@ const styles = StyleSheet.create({
   initials: { fontSize: 20, fontWeight: '700', color: '#6D28D9' },
   details: { flex: 1 },
   name: { fontSize: 17, fontWeight: '700', color: '#1E293B' },
-  email: { fontSize: 13, color: '#64748B', marginTop: 4 },
+  university: { fontSize: 13, color: '#64748B', marginTop: 4 },
+  verified: { fontSize: 12, fontWeight: '600', color: '#15803D', marginTop: 4 },
   subjects: { fontSize: 14, fontWeight: '600', color: '#6D28D9', marginTop: 14, lineHeight: 21 },
   experience: { fontSize: 13, color: '#475569', marginTop: 6 },
   bio: { fontSize: 13, color: '#64748B', lineHeight: 20, marginTop: 10 },

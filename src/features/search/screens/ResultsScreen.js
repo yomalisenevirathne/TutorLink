@@ -4,6 +4,7 @@ import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, V
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, shadow } from '../../../constants/colors';
 import { supabase } from '../../../utils/supabase';
+import useTutorRatingSummaries from '../../../hooks/useTutorRatingSummaries';
 import { FilterPill } from '../components/FilterPill';
 import { NoResultsState } from '../components/NoResultsState';
 import { TutorResultCard } from '../components/TutorResultCard';
@@ -36,6 +37,7 @@ export function ResultsScreen({ navigation }) {
     const [sheetSection, setSheetSection] = useState(null);
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(true);
+    const feedbackRatings = useTutorRatingSummaries(results.map(tutor => tutor.id));
 
     useEffect(() => {
         async function fetchFilteredTutors() {
@@ -150,7 +152,7 @@ export function ResultsScreen({ navigation }) {
 
       {loading ? (<View style={styles.loaderWrap}>
           <ActivityIndicator size="large" color={colors.primary}/>
-        </View>) : (<FlatList data={results} keyExtractor={(t) => t.id} contentContainerStyle={[styles.list, compareIds.length > 0 && { paddingBottom: 110 }]} ListHeaderComponent={<Text style={styles.count}>
+        </View>) : (<FlatList data={results} extraData={feedbackRatings} keyExtractor={(t) => t.id} contentContainerStyle={[styles.list, compareIds.length > 0 && { paddingBottom: 110 }]} ListHeaderComponent={<Text style={styles.count}>
               {results.length} tutor{results.length === 1 ? '' : 's'} found
             </Text>} ListEmptyComponent={query ? (<NoResultsState query={query} onBroadenFilters={() => {
                     updateFilters({
@@ -172,6 +174,7 @@ export function ResultsScreen({ navigation }) {
               </View>)} renderItem={({ item }) => (
                 <TutorResultCard
                   tutor={item}
+                  feedbackRatings={feedbackRatings}
                   onQuickBook={() => navigation?.navigate('ScheduleScreen', {
                     tutorId: item.id,
                     tutorName: item.name,

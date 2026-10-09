@@ -4,10 +4,12 @@ import { colors, shadow } from '../../../constants/colors';
 import { formatRate } from '../utils/filters';
 import { Avatar } from './Avatar';
 import { RatingStars } from './RatingStars';
+import TutorCardFeedbackRating from '../../../components/TutorCardFeedbackRating';
 import { VerifiedBadge } from './VerifiedBadge';
 
 export function TutorResultCard({
     tutor,
+    feedbackRatings,
     onQuickBook,
     onViewProfile,
     onRemove,
@@ -66,7 +68,9 @@ export function TutorResultCard({
                 <Text style={styles.sessionBadgeText}>10+ sessions conducted</Text>
               </View>
             )}
-            <RatingStars rating={tutor?.avgRating} reviewCount={tutor?.reviewCount} size={13}/>
+            {feedbackRatings ? (
+              <TutorCardFeedbackRating tutorId={tutor?.id} feedback={feedbackRatings} size={13}/>
+            ) : <RatingStars rating={tutor?.avgRating} reviewCount={tutor?.reviewCount} size={13}/>}
           </Pressable>
         </View>
 

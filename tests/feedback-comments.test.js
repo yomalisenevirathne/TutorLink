@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { transformSync } = require('@babel/core');
 
-const tutorId = '00000000-0000-0000-0000-000000000001';
+const tutorId = 't10';
 const userId = '00000000-0000-0000-0000-000000000011';
 const commentId = '00000000-0000-0000-0000-000000000021';
 const otherId = '00000000-0000-0000-0000-000000000099';
@@ -35,6 +35,7 @@ function service({ record = saved, error = null, identityError = null } = {}) {
   const module = { exports: {} };
   new Function('require', 'module', 'exports', code)((name) => {
     if (name === '../utils/supabase') return { supabase: client };
+    if (name === './tutors') return { fetchTutorById: async () => { throw new Error('Unexpected tutor lookup'); } };
     if (name === './paymentIdentity') return { getPaymentIdentity: async () => {
       identityChecks++;
       if (identityError) throw identityError;
@@ -67,7 +68,7 @@ test('blank, oversized, and invalid-ID edits never reach authentication or the d
     await assert.rejects(api.editTutorComment(tutorId, user, commentId, text));
   }
   await assert.rejects(api.editTutorComment(tutorId, user, 'invalid', 'Valid text'));
-  await assert.rejects(api.deleteTutorComment('invalid', user, commentId));
+  await assert.rejects(api.deleteTutorComment('', user, commentId));
   await assert.rejects(api.deleteTutorComment(tutorId, user, 'invalid'));
   assert.equal(identityChecks(), 0);
   assert.equal(requests.length, 0);

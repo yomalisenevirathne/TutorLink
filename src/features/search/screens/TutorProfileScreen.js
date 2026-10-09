@@ -7,6 +7,7 @@ import { supabase } from '../../../utils/supabase';
 import { Avatar } from '../components/Avatar';
 import { Chip } from '../components/Chip';
 import { RatingStars } from '../components/RatingStars';
+import TutorProfileRating from '../../../components/TutorProfileRating';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { useDiscovery } from '../context/DiscoveryContext';
 import { formatRate } from '../utils/filters';
@@ -97,8 +98,7 @@ export function TutorProfileScreen({ id, navigation }) {
 
         <View style={styles.stats}>
           <View style={styles.statCol}>
-            <RatingStars rating={tutor.avgRating || 0} compact size={15}/>
-            <Text style={styles.statLabel}>{tutor.reviewCount || 0} reviews</Text>
+            <TutorProfileRating key={tutor.id} tutorId={tutor.id} labelStyle={styles.statLabel}/>
           </View>
           <View style={styles.statDivider}/>
           <View style={styles.statCol}>

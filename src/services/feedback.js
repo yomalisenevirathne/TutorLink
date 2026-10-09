@@ -1,9 +1,12 @@
 import { supabase } from '../utils/supabase';
 import { getPaymentIdentity } from './paymentIdentity';
+import { fetchTutorById } from './tutors';
 
 const uuid = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 const requireTutor = (id) => {
-  if (!uuid.test(id || '')) throw new Error('This tutor profile is unavailable.');
+  if (typeof id !== 'string' || !id.trim() || id !== id.trim()) {
+    throw new Error('This tutor profile is unavailable.');
+  }
 };
 
 export function feedbackErrorMessage(error) {
@@ -48,16 +51,7 @@ async function writerIdentity(user) {
 
 export async function fetchFeedbackTutor(tutorId, signal) {
   requireTutor(tutorId);
-  let query = supabase.from('profiles')
-    .select('id, full_name, avatar_url, tutor_profiles(subjects, experience_level)')
-    .eq('id', tutorId).eq('role', 'Tutor');
-  if (signal) query = query.abortSignal(signal);
-  const { data, error } = await query.maybeSingle();
-  if (error) throw error;
-  if (!data) throw new Error('This tutor profile is unavailable.');
-  const details = Array.isArray(data.tutor_profiles) ? data.tutor_profiles[0] : data.tutor_profiles;
-  return { id: data.id, fullName: data.full_name, avatarUrl: data.avatar_url,
-    subjects: details?.subjects || [], experienceLevel: details?.experience_level || '' };
+  return fetchTutorById(tutorId, signal);
 }
 
 export async function loadTutorFeedback(tutorId, user, signal) {
