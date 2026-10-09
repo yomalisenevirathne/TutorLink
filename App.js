@@ -3,6 +3,7 @@ import { StyleSheet, View, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { AppContext } from './src/context/AppContext';
+import BottomTabBar from './src/components/BottomTabBar';
 
 // Authentication, account, and payment screens.
 import LoadingScreen from './src/screens/LoadingScreen';
@@ -34,7 +35,17 @@ import MyBookingsScreen from './src/screens/MyBookingsScreen';
 const screenPath = (screen) => ({ pathname: '/[page]', params: { page: screen } });
 const publicScreens = ['loading', 'login', 'selection', 'tutorReg', 'studentReg', 'verifyOtp'];
 const bookingScreens = ['ScheduleScreen', 'SessionPreferencesScreen', 'BookingSummaryScreen', 'MyBookingsScreen'];
-const allScreens = [...publicScreens, ...bookingScreens, 'studentProfile', 'tutorProfile', 'testingfeedback', 'feedbackComments', 'paymentHistory', 'payment', 'addCard', 'editCard', 'paymentProcessing', 'paymentSuccess', 'managePayments'];
+const searchScreens = ['SearchHomeScreen', 'SearchScreen', 'ResultsScreen', 'CompareScreen', 'FavoritesScreen', 'SearchTutorProfileScreen'];
+const allScreens = [...publicScreens, ...bookingScreens, ...searchScreens, 'studentProfile', 'tutorProfile', 'testingfeedback', 'feedbackComments', 'paymentHistory', 'payment', 'addCard', 'editCard', 'paymentProcessing', 'paymentSuccess', 'managePayments'];
+
+
+// --- upeksha's Search Flow ---
+import { HomeScreen as SearchHomeScreen } from './src/features/search/screens/HomeScreen';
+import { SearchScreen } from './src/features/search/screens/SearchScreen';
+import { ResultsScreen } from './src/features/search/screens/ResultsScreen';
+import { CompareScreen } from './src/features/search/screens/CompareScreen';
+import { FavoritesScreen } from './src/features/search/screens/FavoritesScreen';
+import { TutorProfileScreen as SearchTutorProfileScreen } from './src/features/search/screens/TutorProfileScreen';
 
 export default function App() {
   const { page = 'loading', tutorId } = useLocalSearchParams();
@@ -268,8 +279,29 @@ export default function App() {
             onDeleteBooking={handleDeleteBooking}
           />
         )}
+
+        {/* ================= 3. SEARCH FLOW ================= */}
+          {currentScreen === 'SearchHomeScreen' && (
+            <SearchHomeScreen navigation={navigation} />
+          )}
+          {currentScreen === 'SearchScreen' && (
+            <SearchScreen navigation={navigation} />
+          )}
+          {currentScreen === 'ResultsScreen' && (
+            <ResultsScreen navigation={navigation} />
+          )}
+          {currentScreen === 'CompareScreen' && (
+            <CompareScreen navigation={navigation} />
+          )}
+          {currentScreen === 'FavoritesScreen' && (
+            <FavoritesScreen navigation={navigation} />
+          )}
+          {currentScreen === 'SearchTutorProfileScreen' && (
+            <SearchTutorProfileScreen navigation={navigation} id={currentBooking.tutorId} />
+          )}
       </View>
-    </SafeAreaView>
+      <BottomTabBar currentScreen={currentScreen} navigation={navigation} accountScreen={accountScreen} />
+      </SafeAreaView>
   );
 }
 
