@@ -16,12 +16,11 @@ import ScheduleScreen from './src/screens/ScheduleScreen';
 import SessionPreferencesScreen from './src/screens/SessionPreferencesScreen';
 import BookingSummaryScreen from './src/screens/BookingSummaryScreen';
 import MyBookingsScreen from './src/screens/MyBookingsScreen';
+import ManageSessionScreen from './src/screens/ManageSessionScreen';
 import { fetchAllBookings } from './src/bookingService';
 
 export default function App() {
-  // Current screen state
   const [currentScreen, setCurrentScreen] = useState('loading');
-
   const [currentUser, setCurrentUser] = useState(null);
   const [verificationEmail, setVerificationEmail] = useState('');
   const [demoOtpCode, setDemoOtpCode] = useState('');
@@ -32,22 +31,18 @@ export default function App() {
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
-  // Real-time Capacity Database (Yomali's Booking Logic)
   const [sessionCapacities, setSessionCapacities] = useState({});
-
-  // Dynamic Bookings State (Upcoming & Past)
   const [myBookings, setMyBookings] = useState([]);
 
-  // Fetch real live bookings from Supabase on launch
   useEffect(() => {
     const loadInitialBookings = async () => {
       try {
-        const data = await fetchAllBookings();
-        if (data && data.length > 0) {
-          setMyBookings(data);
+        if (fetchAllBookings) {
+          const data = await fetchAllBookings();
+          if (data && data.length > 0) setMyBookings(data);
         }
       } catch (err) {
-        console.log('Error fetching initial bookings in App.js:', err);
+        console.log('Error fetching bookings:', err);
       }
     };
     loadInitialBookings();
@@ -92,7 +87,6 @@ export default function App() {
     const actualGroupSize = (groupSize || group_size || 'small').toLowerCase();
     const key = `${year}-${month}-${date}-${slot}`;
 
-    // Add new booking dynamically to myBookings list
     const newBookingItem = {
       id: id || `booking-${Date.now()}`,
       tutor_name: tutor_name || tutorName,
@@ -110,24 +104,13 @@ export default function App() {
     setMyBookings((prev) => [newBookingItem, ...prev]);
 
     setSessionCapacities((prev) => {
-      const current = prev[key] || {
-        privateBooked: false,
-        smallBookedCount: 0,
-        largeBookedCount: 0,
-      };
-
+      const current = prev[key] || { privateBooked: false, smallBookedCount: 0, largeBookedCount: 0 };
       if (actualGroupSize === 'private') {
         return { ...prev, [key]: { ...current, privateBooked: true } };
       } else if (actualGroupSize === 'small') {
-        return {
-          ...prev,
-          [key]: { ...current, smallBookedCount: Math.min(5, current.smallBookedCount + 1) },
-        };
+        return { ...prev, [key]: { ...current, smallBookedCount: Math.min(5, current.smallBookedCount + 1) } };
       } else if (actualGroupSize === 'large') {
-        return {
-          ...prev,
-          [key]: { ...current, largeBookedCount: Math.min(10, current.largeBookedCount + 1) },
-        };
+        return { ...prev, [key]: { ...current, largeBookedCount: Math.min(10, current.largeBookedCount + 1) } };
       }
       return prev;
     });
@@ -158,10 +141,36 @@ export default function App() {
       if (params) {
         setCurrentBooking((prev) => ({ ...prev, ...params }));
       }
+
+      // Direct ManageSession access enabled for testing
+      if (screenName === 'ManageSessionScreen') {
+        setCurrentScreen('ManageSessionScreen');
+        return;
+      }
+
+      if (screenName === 'Bookings' || screenName === 'ScheduleScreen') {
+        setCurrentScreen('ScheduleScreen');
+        return;
+      }
+
+      if (screenName === 'tutorProfile') {
+        setCurrentScreen('tutorProfile');
+        return;
+      }
+
+      if (screenName === 'studentProfile') {
+        setCurrentScreen('studentProfile');
+        return;
+      }
+
       setCurrentScreen(screenName);
     },
     goBack: () => {
-      if (currentScreen === 'MyBookingsScreen') {
+      if (currentScreen === 'ManageSessionScreen') {
+        setCurrentScreen('ScheduleScreen');
+      } else if (currentScreen === 'ScheduleScreen') {
+        setCurrentScreen('studentProfile');
+      } else if (currentScreen === 'MyBookingsScreen') {
         setCurrentScreen('ScheduleScreen');
       } else if (currentScreen === 'BookingSummaryScreen') {
         setCurrentScreen('SessionPreferencesScreen');
@@ -169,6 +178,8 @@ export default function App() {
         setCurrentScreen('ScheduleScreen');
       } else if (currentScreen === 'studentProfile') {
         setCurrentScreen('ScheduleScreen');
+      } else if (currentScreen === 'tutorProfile') {
+        setCurrentScreen('login');
       }
     },
   };
@@ -180,14 +191,15 @@ export default function App() {
       <View style={styles.content}>
         {/* ================= 1. RASHMIKA'S FLOW (UNTOUCHED) ================= */}
         {currentScreen === 'loading' && (
-          <LoadingScreen onFinishLoading={() => setCurrentScreen('login')} />
+          <LoadingScreen onFinishLoading={() => setTimeout(() => setCurrentScreen('login'), 0)} />
         )}
 
         {currentScreen === 'login' && (
           <LoginScreen
             onLoginSuccess={(user) => {
-              setCurrentUser(user);
-              if (user.role === 'Tutor') {
+              const role = user?.role || user?.user_metadata?.role || 'Student';
+              setCurrentUser({ ...(user || {}), role });
+              if (role.toLowerCase() === 'tutor') {
                 setCurrentScreen('tutorProfile');
               } else {
                 setCurrentScreen('studentProfile');
@@ -200,7 +212,8 @@ export default function App() {
         {currentScreen === 'selection' && (
           <RegisterSelectionScreen
             onSelectRole={(role) => {
-              if (role === 'Tutor') {
+              const roleStr = (role || '').toString().trim().toLowerCase();
+              if (roleStr === 'tutor') {
                 setCurrentScreen('tutorReg');
               } else {
                 setCurrentScreen('studentReg');
@@ -218,7 +231,7 @@ export default function App() {
               setCurrentScreen('verifyOtp');
             }}
             onRegistrationSuccess={(user) => {
-              setCurrentUser(user);
+              setCurrentUser({ ...(user || {}), role: 'Tutor' });
               setCurrentScreen('tutorProfile');
             }}
             onBack={() => setCurrentScreen('selection')}
@@ -228,7 +241,7 @@ export default function App() {
         {currentScreen === 'studentReg' && (
           <StudentRegistrationScreen
             onRegistrationSuccess={(user) => {
-              setCurrentUser(user);
+              setCurrentUser({ ...(user || {}), role: 'Student' });
               setCurrentScreen('studentProfile');
             }}
             onBack={() => setCurrentScreen('selection')}
@@ -239,13 +252,7 @@ export default function App() {
           <EmailVerificationScreen
             email={verificationEmail}
             demoOtp={demoOtpCode}
-            onVerificationSuccess={() => {
-              if (currentUser?.role === 'Tutor') {
-                setCurrentScreen('tutorProfile');
-              } else {
-                setCurrentScreen('studentProfile');
-              }
-            }}
+            onVerificationSuccess={() => setCurrentScreen('studentProfile')}
             onBack={() => setCurrentScreen('login')}
           />
         )}
@@ -263,17 +270,30 @@ export default function App() {
         {currentScreen === 'tutorProfile' && (
           <TutorProfileScreen
             user={currentUser}
+            navigation={navigation}
+            onCreateSession={() => setCurrentScreen('ManageSessionScreen')}
+            onNavigateToBookings={() => setCurrentScreen('ManageSessionScreen')}
             onEditProfile={() => setCurrentScreen('tutorReg')}
             onLogout={handleLogout}
           />
         )}
 
-        {/* ================= 2. YOMALI'S BOOKING FLOW ================= */}
+        {/* ================= 2. YOMALI'S BOOKING & SESSION FLOW ================= */}
+        {/* Tutor Manage Session Screen */}
+        {currentScreen === 'ManageSessionScreen' && (
+          <ManageSessionScreen
+            navigation={navigation}
+            currentUser={currentUser || { role: 'Tutor', fullName: 'Sarith Samarakoon' }}
+          />
+        )}
+
+        {/* Student Schedule Screen */}
         {currentScreen === 'ScheduleScreen' && (
           <ScheduleScreen
             navigation={navigation}
             currentBooking={currentBooking}
             getCapacityForSlot={getCapacityForSlot}
+            currentUser={currentUser}
           />
         )}
 
@@ -308,11 +328,6 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  content: {
-    flex: 1,
-  },
+  safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
+  content: { flex: 1 },
 });
