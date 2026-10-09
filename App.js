@@ -31,11 +31,12 @@ import ScheduleScreen from './src/screens/ScheduleScreen';
 import SessionPreferencesScreen from './src/screens/SessionPreferencesScreen';
 import BookingSummaryScreen from './src/screens/BookingSummaryScreen';
 import MyBookingsScreen from './src/screens/MyBookingsScreen';
+import ManageSessionScreen from './src/screens/ManageSessionScreen';
 // `screen` is reserved by Expo Router/React Navigation; use `page` for our route.
 const screenPath = (screen) => ({ pathname: '/[page]', params: { page: screen } });
 const searchScreens = ['SearchHomeScreen', 'SearchScreen', 'ResultsScreen', 'CompareScreen', 'FavoritesScreen', 'SearchTutorProfileScreen'];
 const publicScreens = ['loading', 'login', 'selection', 'tutorReg', 'studentReg', 'verifyOtp', ...searchScreens];
-const bookingScreens = ['ScheduleScreen', 'SessionPreferencesScreen', 'BookingSummaryScreen', 'MyBookingsScreen'];
+const bookingScreens = ['ScheduleScreen', 'SessionPreferencesScreen', 'BookingSummaryScreen', 'MyBookingsScreen', 'ManageSessionScreen'];
 const allScreens = [...publicScreens, ...bookingScreens, 'studentProfile', 'tutorProfile', 'testingfeedback', 'feedbackComments', 'paymentHistory', 'payment', 'addCard', 'editCard', 'paymentProcessing', 'paymentSuccess', 'managePayments'];
 
 
@@ -77,7 +78,8 @@ export default function App() {
     router.replace(screenPath('paymentSuccess'));
   }, [setCurrentBooking]);
   const isBookingScreen = bookingScreens.includes(currentScreen);
-  const accountScreen = currentUser?.role === 'Tutor' ? 'tutorProfile' : 'studentProfile';
+  const isTutorUser = String(currentUser?.role || '').trim().toLowerCase() === 'tutor';
+  const accountScreen = isTutorUser ? 'tutorProfile' : 'studentProfile';
   const openAccount = () => setCurrentScreen(accountScreen);
   const finishPaymentFlow = () => {
     setCurrentBooking((previous) => ({ ...previous, checkout: undefined, paymentReceipt: undefined }));
@@ -105,9 +107,11 @@ export default function App() {
 
   const navigation = {
     navigate: (screenName, params = {}) => {
-      if (!allScreens.includes(screenName)) return;
+      const target = screenName === 'Bookings' || (screenName === 'ScheduleScreen' && isTutorUser && !params.preview)
+        ? (isTutorUser ? 'ManageSessionScreen' : 'ScheduleScreen') : screenName;
+      if (!allScreens.includes(target)) return;
       setCurrentBooking((previous) => ({ ...previous, ...params }));
-      router.navigate(screenPath(screenName));
+      router.navigate(screenPath(target));
     },
     goBack: () => {
       if (router.canGoBack()) router.back();
@@ -211,6 +215,8 @@ export default function App() {
           {currentScreen === 'tutorProfile' && (
             <TutorProfileScreen
               user={currentUser}
+              navigation={navigation}
+              onCreateSession={() => navigation.navigate('ManageSessionScreen')}
               onEditProfile={() => setCurrentScreen('tutorReg')}
               onLogout={handleLogout}
               onNavigateToPayments={() => setCurrentScreen('paymentHistory')}
@@ -245,9 +251,13 @@ export default function App() {
           }} />}
 
         {/* ================= 2. YOMALI'S BOOKING FLOW ================= */}
+        {currentScreen === 'ManageSessionScreen' && (
+          <ManageSessionScreen navigation={navigation} currentUser={currentUser} />
+        )}
         {currentScreen === 'ScheduleScreen' && (
           <ScheduleScreen
             navigation={navigation}
+            currentUser={currentUser}
             currentBooking={currentBooking}
             getCapacityForSlot={getCapacityForSlot}
           />

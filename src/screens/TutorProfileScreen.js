@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Switch, ScrollView, Alert } from 'react-native';
 import { pickQualificationDocument } from '../utils/mediaPicker';
 
-export default function TutorProfileScreen({ user, onEditProfile, onCreateSession, onLogout, onNavigateToPayments }) {
+export default function TutorProfileScreen({ user, onEditProfile, onCreateSession, onLogout, onNavigateToPayments, navigation }) {
   const [notifications, setNotifications] = useState(user?.preferences?.notifications ?? true);
   const [privacy, setPrivacy] = useState(user?.preferences?.privacy ?? false);
 
@@ -176,7 +176,7 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
         {/* Create a Session Button */}
         <TouchableOpacity 
           style={styles.createSessionBtn} 
-          onPress={() => onCreateSession ? onCreateSession() : Alert.alert('Session', 'Create a Session modal opened.')}
+          onPress={() => onCreateSession ? onCreateSession() : navigation?.navigate('ManageSessionScreen')}
         >
           <Text style={styles.createSessionBtnText}>Create a Session</Text>
         </TouchableOpacity>
@@ -187,6 +187,7 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
           <Text style={styles.logoutBtnText}>Log Out</Text>
         </TouchableOpacity>
       </ScrollView>
+
 
     </View>
   );

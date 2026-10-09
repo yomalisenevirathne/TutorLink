@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,16 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { fetchActiveTutorSessionDates } from '../bookingService';
 
-export default function ScheduleScreen({ navigation, currentBooking, getCapacityForSlot }) {
-  // 1. Initialize calendar state dynamically from device's actual current date
+export default function ScheduleScreen({
+  navigation,
+  currentBooking,
+  getCapacityForSlot,
+  currentUser,
+}) {
+  const accountScreen = String(currentUser?.role || '').trim().toLowerCase() === 'tutor'
+    ? 'tutorProfile' : 'studentProfile';
   const now = new Date();
   const [currentYear, setCurrentYear] = useState(
     currentBooking?.year || now.getFullYear()
@@ -26,13 +33,49 @@ export default function ScheduleScreen({ navigation, currentBooking, getCapacity
     currentBooking?.slot || '6:00 PM'
   );
 
+  // Active tutor sessions from Database
+  const [activeSessionDates, setActiveSessionDates] = useState([]);
+
+  // 💡 SECRET DOUBLE-TAP LOGIC: Header title එක 2 පාරක් tap කරද්දී ManageSessionScreen එකට යයි
+  const [lastTap, setLastTap] = useState(0);
+  const handleHeaderDoubleTap = () => {
+    const currentTime = Date.now();
+    if (currentTime - lastTap < 400) {
+      navigation?.navigate('ManageSessionScreen');
+    } else {
+      setLastTap(currentTime);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadSessionDates = async () => {
+      try {
+        if (fetchActiveTutorSessionDates) {
+          const dates = await fetchActiveTutorSessionDates(currentYear, currentMonth + 1);
+          if (isMounted) {
+            setActiveSessionDates(dates || []);
+          }
+        }
+      } catch (e) {
+        console.log('Error loading tutor session dates:', e);
+        if (isMounted) {
+          setActiveSessionDates([]);
+        }
+      }
+    };
+    loadSessionDates();
+    return () => {
+      isMounted = false;
+    };
+  }, [currentYear, currentMonth]);
+
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
   const daysOfWeek = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
-  // Past Date Validation: returns true if (year, month, day) is before today
   const isPastDate = (year, month, day) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -40,7 +83,6 @@ export default function ScheduleScreen({ navigation, currentBooking, getCapacity
     return cellDate < today;
   };
 
-  // Calendar Math
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
   const startOffset = (firstDayIndex + 6) % 7;
@@ -81,12 +123,10 @@ export default function ScheduleScreen({ navigation, currentBooking, getCapacity
     }
   };
 
-  // Standard Available Slots
   const morningTimes = ['8:00 AM', '9:00 AM', '10:00 AM'];
   const afternoonTimes = ['1:00 PM', '2:00 PM', '3:00 PM'];
   const eveningTimes = ['5:00 PM', '6:00 PM', '7:00 PM'];
 
-  // Capacity status check
   const checkSlotStatus = (time) => {
     if (!selectedDay || !getCapacityForSlot) return { isBooked: false };
     const cap = getCapacityForSlot(currentYear, currentMonth, selectedDay, time);
@@ -105,12 +145,10 @@ export default function ScheduleScreen({ navigation, currentBooking, getCapacity
       Alert.alert('Date Required', 'Please select a date from the calendar.');
       return;
     }
-
     if (isPastDate(currentYear, currentMonth, selectedDay)) {
-      Alert.alert('Invalid Date', 'You cannot select a past date. Please select today or an upcoming date.');
+      Alert.alert('Invalid Date', 'You cannot select a past date.');
       return;
     }
-
     if (!selectedSlot) {
       Alert.alert('Slot Required', 'Please select a time slot.');
       return;
@@ -165,13 +203,24 @@ export default function ScheduleScreen({ navigation, currentBooking, getCapacity
 
       {/* Header */}
       <View style={styles.header}>
-        <View style={{ width: 24 }} />
-        <Text style={styles.headerTitle}>Schedule Selection</Text>
+        <TouchableOpacity
+          style={styles.headerIconBtn}
+          onPress={() => navigation?.goBack ? navigation.goBack() : navigation?.navigate(accountScreen)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        {/* 💡 SECRET DOUBLE-TAP TITLE (Double-tap to open ManageSessionScreen) */}
+        <TouchableOpacity onPress={handleHeaderDoubleTap} activeOpacity={0.85}>
+          <Text style={styles.headerTitle}>Schedule Selection</Text>
+        </TouchableOpacity>
+
         <View style={styles.headerRightIcons}>
           <TouchableOpacity style={{ marginRight: 14 }}>
             <Ionicons name="notifications" size={22} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation?.navigate('studentProfile')}>
+          <TouchableOpacity onPress={() => navigation?.navigate(accountScreen)}>
             <Ionicons name="person-circle" size={26} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -179,6 +228,14 @@ export default function ScheduleScreen({ navigation, currentBooking, getCapacity
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionHeading}>Select Date</Text>
+
+        {/* Legend: Available Classes (Only if database has sessions) */}
+        {activeSessionDates.length > 0 && (
+          <View style={styles.legendIndicatorRow}>
+            <View style={styles.legendDot} />
+            <Text style={styles.legendText}>Available Classes</Text>
+          </View>
+        )}
 
         {/* Real Interactive Calendar */}
         <View style={styles.calendarCard}>
@@ -218,6 +275,7 @@ export default function ScheduleScreen({ navigation, currentBooking, getCapacity
             {Array.from({ length: daysInMonth }, (_, idx) => idx + 1).map((day) => {
               const isSelected = selectedDay === day;
               const isPast = isPastDate(currentYear, currentMonth, day);
+              const hasSession = activeSessionDates.includes(day);
 
               return (
                 <View key={day} style={styles.dateCol}>
@@ -227,6 +285,7 @@ export default function ScheduleScreen({ navigation, currentBooking, getCapacity
                       styles.dateCell,
                       isSelected && !isPast && styles.selectedDateCell,
                       isPast && styles.disabledDateCell,
+                      hasSession && !isSelected && !isPast && styles.sessionAccentCell,
                     ]}
                     onPress={() => setSelectedDay(day)}
                     activeOpacity={0.7}
@@ -236,10 +295,19 @@ export default function ScheduleScreen({ navigation, currentBooking, getCapacity
                         styles.dateText,
                         isSelected && !isPast && styles.selectedDateText,
                         isPast && styles.disabledDateText,
+                        hasSession && !isSelected && !isPast && styles.sessionDateText,
                       ]}
                     >
                       {day}
                     </Text>
+                    {hasSession && !isPast && (
+                      <View
+                        style={[
+                          styles.sessionDot,
+                          isSelected && styles.sessionDotSelected,
+                        ]}
+                      />
+                    )}
                   </TouchableOpacity>
                 </View>
               );
@@ -268,7 +336,7 @@ export default function ScheduleScreen({ navigation, currentBooking, getCapacity
           <Text style={styles.continueBtnText}>Continue</Text>
         </TouchableOpacity>
 
-        {/* Secondary Gold Go to My Bookings Button */}
+        {/* Secondary Go to My Bookings Button */}
         <TouchableOpacity
           style={styles.myBookingsBtn}
           onPress={() => navigation?.navigate('MyBookingsScreen')}
@@ -291,15 +359,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
+  headerIconBtn: { padding: 4 },
   headerTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
   headerRightIcons: { flexDirection: 'row', alignItems: 'center' },
-  scrollContent: { paddingHorizontal: 16, paddingBottom: 24 },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 30 },
   sectionHeading: {
     fontSize: 16,
     fontWeight: '700',
     color: '#111827',
     marginTop: 18,
-    marginBottom: 12,
+    marginBottom: 10,
+  },
+  legendIndicatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  legendDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#6A1B9A',
+    marginRight: 6,
+  },
+  legendText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6A1B9A',
   },
   calendarCard: {
     backgroundColor: '#FFFFFF',
@@ -324,16 +410,31 @@ const styles = StyleSheet.create({
   dateCol: { width: '14.28%', alignItems: 'center', marginVertical: 4 },
   dateCell: {
     width: 36,
-    height: 36,
+    height: 38,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
   selectedDateCell: { backgroundColor: '#6A1B9A' },
+  sessionAccentCell: {
+    backgroundColor: '#FAF5FF',
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+  },
   disabledDateCell: { opacity: 0.4, backgroundColor: '#F8FAFC' },
   dateText: { fontSize: 14, color: '#374151', fontWeight: '500' },
+  sessionDateText: { color: '#6A1B9A', fontWeight: '700' },
   selectedDateText: { color: '#FFFFFF', fontWeight: '700' },
   disabledDateText: { color: '#CBD5E1' },
+  sessionDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#6A1B9A',
+    marginTop: 2,
+  },
+  sessionDotSelected: { backgroundColor: '#FFFFFF' },
   slotGroupTitle: {
     fontSize: 13,
     fontWeight: '600',
