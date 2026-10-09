@@ -30,10 +30,10 @@ export default function SavedCardsManager({ userId, isDemo, cardsVersion, onEdit
   return <View>
     {!!actionError && <Text style={styles.error} accessibilityRole="alert">{actionError}</Text>}
     <SavedPaymentMethodsList cards={cards} loading={loading} error={error} onRetry={refresh}
-      onEdit={onEdit} onDelete={remove} deletingId={deletingId} />
+      onEdit={onEdit} onDelete={remove} deletingId={deletingId} variant="manage" />
   </View>;
 }
 
 const styles = StyleSheet.create({
-  error: { color: '#A33333', backgroundColor: '#FFF1F1', borderRadius: 6, padding: 12, fontSize: 13, lineHeight: 20, marginBottom: 12 },
+  error: { color: '#AD354A', backgroundColor: '#FFF0F3', borderWidth: 1, borderColor: '#F7DDE3', borderRadius: 16, padding: 14, fontSize: 13, lineHeight: 20, marginBottom: 14 },
 });

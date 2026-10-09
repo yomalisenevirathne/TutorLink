@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   TextInput,
   Switch,
@@ -16,7 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { checkSlotConflict, saveTutorSessionToDb, saveTutorSession } from '../bookingService';
+import { checkSlotConflict, saveTutorSessionToDb } from '../bookingService';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -157,7 +156,7 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
 
     const isMorning = slotTime.includes('AM');
     const newSlot = {
-      id: `slot-${Date.now()}`,
+      id: `slot-${slotTime}`,
       time: slotTime,
       period: isMorning ? 'Morning' : 'Afternoon / Evening',
       bookingsCount: 0,
@@ -240,7 +239,7 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#6A1B9A" />
 
       {/* Top Header */}
@@ -644,36 +643,8 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
         </View>
       </Modal>
 
-      {/* Bottom Nav */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation?.navigate('tutorProfile')}
-        >
-          <Ionicons name="home-outline" size={22} color="#1F2937" />
-          <Text style={styles.navLabel}>Home</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="calendar" size={22} color="#D48B06" />
-          <Text style={[styles.navLabel, { color: '#D48B06' }]}>Bookings</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="chatbubble-outline" size={22} color="#1F2937" />
-          <Text style={styles.navLabel}>Messages</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="wallet-outline" size={22} color="#1F2937" />
-          <Text style={styles.navLabel}>Payments</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation?.navigate('tutorProfile')}
-        >
-          <Ionicons name="person-outline" size={22} color="#1F2937" />
-          <Text style={styles.navLabel}>Account</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+
+    </View>
   );
 }
 

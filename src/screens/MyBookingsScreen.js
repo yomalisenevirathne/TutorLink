@@ -1,5 +1,5 @@
 // src/screens/MyBookingsScreen.js
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   StatusBar,
   Alert,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { cancelBookingInDb, completeBookingInDb, deleteBookingFromDb } from '../bookingService';
@@ -20,6 +21,8 @@ export default function MyBookingsScreen({
   onDeleteBooking,
 }) {
   const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming' or 'past'
+  const [completingId, setCompletingId] = useState(null);
+  const completing = useRef(false);
   const bookings = propBookings ?? [];
 
   // Dynamic Categorization
@@ -70,23 +73,39 @@ export default function MyBookingsScreen({
 
   // Mark as Completed Handler (for lifecycle and moving to Past tab)
   const handleMarkCompleted = (id, tutor) => {
+    if (completing.current) return;
+    const message = `Mark session with ${tutor} as completed? It will move to the Past tab.`;
+    const complete = async () => {
+      if (completing.current) return;
+      completing.current = true;
+      setCompletingId(id);
+      try {
+        const result = await completeBookingInDb(id);
+        if (!result.success) {
+          const errorMessage = result.error?.message || 'Please try again.';
+          if (Platform.OS === 'web') window.alert(`Unable to complete: ${errorMessage}`);
+          else Alert.alert('Unable to complete', errorMessage);
+          return;
+        }
+        onCompleteBooking?.(id);
+        setActiveTab('past');
+      } finally {
+        completing.current = false;
+        setCompletingId(null);
+      }
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(message)) complete();
+      return;
+    }
     Alert.alert(
       'Complete Session',
-      `Mark session with ${tutor} as completed? It will move to the Past tab.`,
+      message,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Mark Completed',
-          onPress: async () => {
-            const result = await completeBookingInDb(id);
-            if (!result.success) {
-              Alert.alert('Unable to complete', result.error?.message || 'Please try again.');
-              return;
-            }
-            if (onCompleteBooking) {
-              onCompleteBooking(id);
-            }
-          },
+          onPress: complete,
         },
       ]
     );
@@ -249,11 +268,12 @@ export default function MyBookingsScreen({
                 {/* Simulation button to mark completed for testing */}
                 <TouchableOpacity
                   style={styles.completeActionBtn}
+                  disabled={completingId !== null}
                   onPress={() => handleMarkCompleted(item.id, item.tutor_name || 'Tutor')}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="checkmark-circle-outline" size={16} color="#059669" />
-                  <Text style={styles.completeActionText}>Mark as Completed</Text>
+                  <Text style={styles.completeActionText}>{completingId === item.id ? 'Completing...' : 'Mark as Completed'}</Text>
                 </TouchableOpacity>
               </View>
             ))
