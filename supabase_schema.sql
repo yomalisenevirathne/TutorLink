@@ -49,7 +49,61 @@ CREATE TABLE IF NOT EXISTS public.tutor_certificates (
   uploaded_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. Email OTP Verifications Table
+-- 5. Tutor listings shown in search results
+CREATE TABLE IF NOT EXISTS public.tutors (
+  id TEXT PRIMARY KEY DEFAULT ('tutor_' || gen_random_uuid()::text),
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  university TEXT,
+  year_of_study INT,
+  photo_url TEXT,
+  bio TEXT,
+  subjects JSONB NOT NULL DEFAULT '[]'::jsonb,
+  hourly_rate NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  session_modes JSONB NOT NULL DEFAULT '["online"]'::jsonb,
+  experience_level TEXT,
+  verified_status TEXT NOT NULL DEFAULT 'unverified'
+    CHECK (verified_status IN ('verified', 'unverified', 'pending')),
+  avg_rating NUMERIC(3, 2) NOT NULL DEFAULT 0,
+  review_count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 6. Saved tutor wishlist
+CREATE TABLE IF NOT EXISTS public.wishlists (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  -- tutors.id is TEXT in the existing TutorLink database.
+  tutor_id TEXT NOT NULL REFERENCES public.tutors(id) ON DELETE CASCADE,
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, tutor_id)
+);
+
+-- Local-first feature equivalents for the saved tutor and preset data model.
+CREATE TABLE IF NOT EXISTS public.saved_tutors (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  tutor_id TEXT NOT NULL REFERENCES public.tutors(id) ON DELETE CASCADE,
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, tutor_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.filter_presets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  filters_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 7. Email OTP Verifications Table
 CREATE TABLE IF NOT EXISTS public.otp_verifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT NOT NULL,
@@ -67,6 +121,10 @@ ALTER TABLE public.student_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tutor_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tutor_certificates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.otp_verifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tutors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.wishlists ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.saved_tutors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.filter_presets ENABLE ROW LEVEL SECURITY;
 
 -- Allow public read access for profiles and tutor listings
 CREATE POLICY "Public profiles are viewable by everyone." ON public.profiles FOR SELECT USING (true);
@@ -85,6 +143,34 @@ CREATE POLICY "Tutor certificates viewable by everyone." ON public.tutor_certifi
 CREATE POLICY "Tutor certificates insert" ON public.tutor_certificates FOR INSERT WITH CHECK (true);
 
 CREATE POLICY "OTP verifications policy" ON public.otp_verifications FOR ALL USING (true);
+CREATE POLICY "Tutors are viewable by everyone." ON public.tutors FOR SELECT USING (true);
+CREATE POLICY "Tutors can be created." ON public.tutors FOR INSERT WITH CHECK (true);
+CREATE POLICY "Tutors can be updated." ON public.tutors FOR UPDATE USING (true);
+CREATE POLICY "Tutors can be deleted." ON public.tutors FOR DELETE USING (true);
+CREATE POLICY "Users can view their wishlist." ON public.wishlists
+  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can save tutors." ON public.wishlists
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their wishlist." ON public.wishlists
+  FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can remove wishlist items." ON public.wishlists
+  FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Users can view saved tutors." ON public.saved_tutors
+  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can create saved tutors." ON public.saved_tutors
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update saved tutors." ON public.saved_tutors
+  FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete saved tutors." ON public.saved_tutors
+  FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Users can view filter presets." ON public.filter_presets
+  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can create filter presets." ON public.filter_presets
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update filter presets." ON public.filter_presets
+  FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete filter presets." ON public.filter_presets
+  FOR DELETE USING (auth.uid() = user_id);
 
 -- ===================================================
 -- SAMPLE SEED DATA FOR TESTING
