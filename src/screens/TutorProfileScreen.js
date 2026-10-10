@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Switch, ScrollView, Alert } from 'react-native';
 import { pickQualificationDocument } from '../utils/mediaPicker';
+import { tutorService } from '../services/tutorService';
 
-export default function TutorProfileScreen({ user, onEditProfile, onCreateSession, onLogout }) {
+export default function TutorProfileScreen({ user, onEditProfile, onCreateSession, onLogout, onDeleteProfile }) {
   const [notifications, setNotifications] = useState(user?.preferences?.notifications ?? true);
   const [privacy, setPrivacy] = useState(user?.preferences?.privacy ?? false);
   const [activeTab, setActiveTab] = useState('Account');
@@ -37,6 +38,32 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Log Out', style: 'destructive', onPress: () => onLogout && onLogout() }
+      ]
+    );
+  };
+
+  const handleDeleteProfile = () => {
+    Alert.alert(
+      'Delete tutor profile',
+      'This permanently removes your tutor listing from search. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const tutor = user?.tutorId
+                ? await tutorService.getById(user.tutorId)
+                : await tutorService.getByEmail(user?.email);
+              if (!tutor?.id) throw new Error('Tutor listing was not found.');
+              await tutorService.remove(tutor.id);
+              onDeleteProfile && onDeleteProfile();
+            } catch (error) {
+              Alert.alert('Delete failed', error.message);
+            }
+          },
+        },
       ]
     );
   };
@@ -187,6 +214,9 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
           <Text style={styles.logoutIcon}>🚪</Text>
           <Text style={styles.logoutBtnText}>Log Out</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteProfile}>
+          <Text style={styles.deleteBtnText}>Delete Tutor Profile</Text>
+        </TouchableOpacity>
       </ScrollView>
 
     </View>
@@ -283,6 +313,16 @@ const styles = StyleSheet.create({
     color: '#E11D48',
     textAlign: 'center',
     marginTop: 10,
+  },
+  deleteBtn: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginTop: 8,
+  },
+  deleteBtnText: {
+    color: '#DC2626',
+    fontSize: 13,
+    fontWeight: '700',
     marginBottom: 16,
   },
   card: {

@@ -4,6 +4,7 @@ import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, V
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, shadow } from '../../../constants/colors';
 import { supabase } from '../../../utils/supabase';
+import { tutorService } from '../../../services/tutorService';
 import { Chip } from '../components/Chip';
 import { TutorCard } from '../components/TutorCard';
 import { useDiscovery } from '../context/DiscoveryContext';
@@ -62,18 +63,12 @@ export function HomeScreen({ navigation }) {
         async function fetchRecommendedTutors() {
             try {
                 setLoading(true);
-                let q = supabase.from('tutors').select('*');
-                if (sessionMode === 'physical') {
-                    q = q.contains('session_modes', ['physical']);
-                } else if (sessionMode === 'online') {
-                    q = q.contains('session_modes', ['online']);
-                }
-                const { data, error } = await q.limit(6);
-                let rawList = (!error && data && data.length > 0) ? data : [];
-                if (rawList.length === 0) {
-                    const fallback = await supabase.from('tutors').select('*').limit(6);
-                    rawList = fallback.data || [];
-                }
+                const allTutors = await tutorService.list();
+                let rawList = allTutors.filter((t) => {
+                    const modes = Array.isArray(t.modesOffered) ? t.modesOffered : [];
+                    return modes.length === 0 || modes.includes(sessionMode);
+                }).slice(0, 6);
+                if (rawList.length === 0) rawList = allTutors.slice(0, 6);
                 const normalized = rawList.map((t) => ({
                     ...t,
                     hourlyRate: t.hourlyRate ?? t.hourly_rate ?? 0,

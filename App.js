@@ -239,6 +239,7 @@ export default function App() {
 
         {currentScreen === 'tutorReg' && (
           <TutorRegistrationScreen
+            user={currentUser}
             onNavigateToVerifyOtp={(email, otp) => {
               setVerificationEmail(email);
               setDemoOtpCode(otp);
@@ -291,6 +292,10 @@ export default function App() {
           <TutorProfileScreen
             user={currentUser}
             onEditProfile={() => setCurrentScreen('tutorReg')}
+            onDeleteProfile={() => {
+              setCurrentUser(null);
+              setCurrentScreen('login');
+            }}
             onLogout={handleLogout}
           />
         )}
