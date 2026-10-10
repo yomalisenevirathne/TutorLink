@@ -9,7 +9,7 @@ export default function BookingSuccessModal({
   onGoToBookings,
   onBackToHome,
 }) {
-  const { date = 15, slot = '6:00 PM' } = bookingDetails || {};
+  const { date = 15, slot = '6:00 PM', tutorName = 'Sarith Samarakoon' } = bookingDetails || {};
 
   return (
     <Modal visible={visible} transparent animationType="fade">
@@ -27,9 +27,9 @@ export default function BookingSuccessModal({
 
           {/* Subtitle / Description */}
           <Text style={styles.description}>
-            Your session with <Text style={styles.boldText}>Sarith S.</Text> has been successfully booked for{' '}
+            Your session with <Text style={styles.boldText}>{tutorName}</Text> has been successfully booked for{' '}
             <Text style={styles.highlightText}>
-              Mon, Sep {date} at {slot}
+              Date {date} at {slot}
             </Text>
             .
           </Text>

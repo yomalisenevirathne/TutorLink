@@ -24,22 +24,22 @@ export default function BottomTabBar({ currentScreen, navigation }) {
       name: 'Bookings',
       iconOutline: 'calendar-outline',
       iconFilled: 'calendar',
-      target: 'ScheduleScreen',
-      isActive: currentScreen === 'ScheduleScreen' || currentScreen === 'MyBookingsScreen' || currentScreen === 'SessionPreferencesScreen' || currentScreen === 'BookingSummaryScreen',
+      target: 'Bookings',
+      isActive: currentScreen === 'ScheduleScreen' || currentScreen === 'SessionPreferencesScreen' || currentScreen === 'BookingSummaryScreen' || currentScreen === 'ManageSessionScreen' || currentScreen === 'BookingSuccessScreen',
     },
     {
-      name: 'Messages',
-      iconOutline: 'chatbubble-outline',
-      iconFilled: 'chatbubble',
-      target: 'FavoritesScreen',
-      isActive: currentScreen === 'FavoritesScreen' || currentScreen === 'CompareScreen',
+      name: 'My Bookings',
+      iconOutline: 'calendar-number-outline',
+      iconFilled: 'calendar-number',
+      target: 'MyBookingsScreen',
+      isActive: currentScreen === 'MyBookingsScreen',
     },
     {
       name: 'Payments',
       iconOutline: 'wallet-outline',
       iconFilled: 'wallet',
-      target: 'ScheduleScreen',
-      isActive: false,
+      target: 'FavoritesScreen',
+      isActive: currentScreen === 'FavoritesScreen' || currentScreen === 'CompareScreen',
     },
     {
       name: 'Account',
@@ -62,7 +62,10 @@ export default function BottomTabBar({ currentScreen, navigation }) {
             style={styles.tabItem}
             onPress={() => navigation.navigate(tab.target)}>
             <Ionicons name={iconName} size={22} color={color} />
-            <Text style={[styles.tabText, { color, fontWeight: tab.isActive ? '700' : '500' }]}>
+            <Text
+              numberOfLines={1}
+              style={[styles.tabText, { color, fontWeight: tab.isActive ? '700' : '500' }]}
+            >
               {tab.name}
             </Text>
           </Pressable>

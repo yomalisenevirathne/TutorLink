@@ -14,11 +14,12 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
-
+// .env එකෙන් හෝ direct fallback එකෙන් values ලබා ගැනීම (Undefined වීම වැළැක්වීමට)
 const SUPABASE_URL = 
-  process.env.EXPO_PUBLIC_SUPABASE_URL;
+  process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://zycqidwaepstggspofvc.supabase.co';
+  
 const SUPABASE_KEY = 
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env.EXPO_PUBLIC_SUPABASE_KEY || 'sb_publishable_5bLuMzWMzc4K7puPYHZdeA_Mtm6Cyc4';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {

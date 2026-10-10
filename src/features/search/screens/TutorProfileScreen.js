@@ -156,6 +156,18 @@ export function TutorProfileScreen({ id, navigation }) {
             tutorId: tutor.id,
             tutorName: tutor.name,
             subject: (tutor.subjects?.[0]?.subjectName || tutor.subjects?.[0] || 'General Tutoring'),
+            tutor: {
+              id: tutor.id,
+              name: tutor.name,
+              subject: (tutor.subjects?.[0]?.subjectName || tutor.subjects?.[0] || 'General Tutoring'),
+              role: `${tutor.university || 'University'} · Year ${tutor.yearOfStudy || 1}`,
+              university: tutor.university,
+              rating: tutor.avgRating || '4.9',
+              reviewCount: tutor.reviewCount || 28,
+              hourlyRate: tutor.hourlyRate || 700,
+              fee: tutor.hourlyRate || 700,
+              photoUrl: tutor.photoUrl,
+            },
           })}
         >
           <Text style={styles.primaryText}>Book Session</Text>

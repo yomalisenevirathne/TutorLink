@@ -33,6 +33,7 @@ export default function SessionPreferencesScreen({
     largeBookedCount: 0,
   });
   const [loadingCapacity, setLoadingCapacity] = useState(true);
+  const [dbLoaded, setDbLoaded] = useState(false);
 
   // Fetch live Supabase queries for chosen date and slot
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function SessionPreferencesScreen({
         const liveCap = await fetchCapacityForSlot(year, month, date, slot);
         if (isMounted && liveCap) {
           setDbCapacity(liveCap);
+          setDbLoaded(true);
         }
       } catch (err) {
         console.error('Error fetching slot capacity:', err);
@@ -54,19 +56,30 @@ export default function SessionPreferencesScreen({
     };
 
     loadLiveCapacity();
+
+    // Re-fetch automatically when screen regains focus (e.g. returning after cancellation)
+    const unsubscribe = navigation?.addListener
+      ? navigation.addListener('focus', loadLiveCapacity)
+      : null;
+
     return () => {
       isMounted = false;
+      if (unsubscribe && typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
     };
-  }, [year, month, date, slot]);
+  }, [year, month, date, slot, navigation]);
 
-  // Combine with in-memory local state
+  // Fallback to in-memory local state if DB hasn't loaded yet
   const localCap = getCapacityForSlot
     ? getCapacityForSlot(year, month, date, slot)
     : { privateBooked: false, smallBookedCount: 0, largeBookedCount: 0 };
 
-  const isPrivateDisabled = dbCapacity.privateBooked || localCap.privateBooked;
-  const smallCount = Math.max(dbCapacity.smallBookedCount, localCap.smallBookedCount);
-  const largeCount = Math.max(dbCapacity.largeBookedCount, localCap.largeBookedCount);
+  // Live Supabase database query is the primary source of truth once loaded
+  const effectiveCap = dbLoaded ? dbCapacity : (localCap || dbCapacity);
+  const isPrivateDisabled = Boolean(effectiveCap.privateBooked);
+  const smallCount = Number(effectiveCap.smallBookedCount || 0);
+  const largeCount = Number(effectiveCap.largeBookedCount || 0);
 
   const smallSeatsLeft = Math.max(0, 5 - smallCount);
   const isSmallFull = smallSeatsLeft === 0;
@@ -76,8 +89,8 @@ export default function SessionPreferencesScreen({
 
   const [selectedMode, setSelectedMode] = useState(currentBooking?.mode || 'physical');
   const [selectedGroupSize, setSelectedGroupSize] = useState(() => {
-    if (!isSmallFull) return 'small';
     if (!isPrivateDisabled) return 'private';
+    if (!isSmallFull) return 'small';
     if (!isLargeFull) return 'large';
     return null;
   });
@@ -93,11 +106,15 @@ export default function SessionPreferencesScreen({
       else if (!isLargeFull) setSelectedGroupSize('large');
       else setSelectedGroupSize(null);
     } else if (selectedGroupSize === 'large' && isLargeFull) {
-      if (!isSmallFull) setSelectedGroupSize('small');
-      else if (!isPrivateDisabled) setSelectedGroupSize('private');
+      if (!isPrivateDisabled) setSelectedGroupSize('private');
+      else if (!isSmallFull) setSelectedGroupSize('small');
       else setSelectedGroupSize(null);
+    } else if (!selectedGroupSize) {
+      if (!isPrivateDisabled) setSelectedGroupSize('private');
+      else if (!isSmallFull) setSelectedGroupSize('small');
+      else if (!isLargeFull) setSelectedGroupSize('large');
     }
-  }, [isPrivateDisabled, isSmallFull, isLargeFull]);
+  }, [isPrivateDisabled, isSmallFull, isLargeFull, selectedGroupSize]);
 
   const handleContinue = () => {
     if (!selectedGroupSize) {
@@ -123,6 +140,15 @@ export default function SessionPreferencesScreen({
     navigation?.navigate('BookingSummaryScreen', {
       mode: selectedMode,
       groupSize: selectedGroupSize,
+      year,
+      month,
+      monthName,
+      date,
+      slot,
+      tutor: currentBooking?.tutor,
+      tutorName: currentBooking?.tutorName || currentBooking?.tutor?.name,
+      tutor_name: currentBooking?.tutor_name || currentBooking?.tutor?.name,
+      subject: currentBooking?.subject || currentBooking?.tutor?.subject,
     });
   };
 
@@ -532,14 +558,4 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
   continueBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-  },
-  navItem: { alignItems: 'center' },
-  navLabel: { fontSize: 11, fontWeight: '600', color: '#1F2937', marginTop: 3 },
 });

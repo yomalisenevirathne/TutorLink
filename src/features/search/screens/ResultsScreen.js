@@ -181,6 +181,18 @@ export function ResultsScreen({ navigation }) {
                     tutorId: item.id,
                     tutorName: item.name,
                     subject: (item.subjects?.[0]?.subjectName || item.subjects?.[0] || 'General Tutoring'),
+                    tutor: {
+                      id: item.id,
+                      name: item.name,
+                      subject: (item.subjects?.[0]?.subjectName || item.subjects?.[0] || 'General Tutoring'),
+                      role: `${item.university || 'University'} · Year ${item.yearOfStudy || 1}`,
+                      university: item.university,
+                      rating: item.avgRating || '4.9',
+                      reviewCount: item.reviewCount || 28,
+                      hourlyRate: item.hourlyRate || 700,
+                      fee: item.hourlyRate || 700,
+                      photoUrl: item.photoUrl,
+                    },
                   })}
                   onViewProfile={() => navigation?.navigate('SearchTutorProfileScreen', {
                     tutorId: item.id,

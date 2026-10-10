@@ -17,6 +17,7 @@ import TutorProfileScreen from './src/screens/TutorProfileScreen';
 import ScheduleScreen from './src/screens/ScheduleScreen';
 import SessionPreferencesScreen from './src/screens/SessionPreferencesScreen';
 import BookingSummaryScreen from './src/screens/BookingSummaryScreen';
+import BookingSuccessScreen from './src/screens/BookingSuccessScreen';
 import MyBookingsScreen from './src/screens/MyBookingsScreen';
 import ManageSessionScreen from './src/screens/ManageSessionScreen';
 import { fetchAllBookings } from './src/bookingService';
@@ -130,11 +131,47 @@ export default function App() {
     });
   };
 
-  const handleCancelBooking = (bookingId) => {
+  const releaseSlotCapacity = (booking) => {
+    if (!booking) return;
+    const { year, month, date, slot, group_size, groupSize } = booking;
+    const actualGroupSize = (group_size || groupSize || 'small').toLowerCase();
+    const key = `${year}-${month}-${date}-${slot}`;
+
+    setSessionCapacities((prev) => {
+      const current = prev[key];
+      if (!current) return prev;
+      if (actualGroupSize === 'private') {
+        return { ...prev, [key]: { ...current, privateBooked: false } };
+      } else if (actualGroupSize === 'small') {
+        return {
+          ...prev,
+          [key]: {
+            ...current,
+            smallBookedCount: Math.max(0, (current.smallBookedCount || 1) - 1),
+          },
+        };
+      } else if (actualGroupSize === 'large') {
+        return {
+          ...prev,
+          [key]: {
+            ...current,
+            largeBookedCount: Math.max(0, (current.largeBookedCount || 1) - 1),
+          },
+        };
+      }
+      return prev;
+    });
+  };
+
+  const handleCancelBooking = (bookingId, bookingData) => {
+    const booking = bookingData || myBookings.find((b) => b.id === bookingId);
+    if (booking) releaseSlotCapacity(booking);
     setMyBookings((prev) => prev.filter((b) => b.id !== bookingId));
   };
 
-  const handleDeleteBooking = (bookingId) => {
+  const handleDeleteBooking = (bookingId, bookingData) => {
+    const booking = bookingData || myBookings.find((b) => b.id === bookingId);
+    if (booking) releaseSlotCapacity(booking);
     setMyBookings((prev) => prev.filter((b) => b.id !== bookingId));
   };
 
@@ -158,7 +195,28 @@ export default function App() {
   const navigation = {
     navigate: (screenName, params = {}) => {
       if (params) {
-        setCurrentBooking((prev) => ({ ...prev, ...params }));
+        setCurrentBooking((prev) => {
+          const tutorData = params.tutor || (params.tutorName ? {
+            id: params.tutorId || prev?.tutor?.id,
+            name: params.tutorName || prev?.tutor?.name,
+            subject: params.subject || prev?.tutor?.subject,
+            role: params.role || prev?.tutor?.role || 'University Tutor',
+            university: params.university || prev?.tutor?.university || 'University',
+            rating: params.rating || prev?.tutor?.rating || '4.8',
+            hourlyRate: params.hourlyRate || params.fee || prev?.tutor?.hourlyRate || 700,
+            fee: params.fee || params.hourlyRate || prev?.tutor?.fee || 700,
+            photoUrl: params.photoUrl || prev?.tutor?.photoUrl,
+          } : prev?.tutor);
+
+          return {
+            ...prev,
+            ...params,
+            tutor_name: params.tutorName || params.tutor_name || tutorData?.name || prev.tutor_name || 'Sarith Samarakoon',
+            tutorName: params.tutorName || params.tutor_name || tutorData?.name || prev.tutorName || 'Sarith Samarakoon',
+            subject: params.subject || tutorData?.subject || prev.subject || 'Data Structures & Algorithms',
+            tutor: tutorData ? { ...(prev?.tutor || {}), ...tutorData } : prev?.tutor,
+          };
+        });
       }
 
       const isTutor = isTutorUser(currentUser);
@@ -200,6 +258,8 @@ export default function App() {
           setCurrentScreen('SearchHomeScreen');
         } else if (currentScreen === 'ManageSessionScreen') {
           setCurrentScreen(isTutorUser(currentUser) ? 'tutorProfile' : 'ScheduleScreen');
+        } else if (currentScreen === 'BookingSuccessScreen') {
+          setCurrentScreen('ScheduleScreen');
         } else if (currentScreen === 'MyBookingsScreen' || currentScreen === 'SessionPreferencesScreen') {
           setCurrentScreen('ScheduleScreen');
         } else if (currentScreen === 'BookingSummaryScreen') {
@@ -340,6 +400,13 @@ export default function App() {
               navigation={navigation}
               currentBooking={currentBooking}
               onConfirm={handleConfirmBooking}
+            />
+          )}
+
+          {currentScreen === 'BookingSuccessScreen' && (
+            <BookingSuccessScreen
+              navigation={navigation}
+              route={{ params: currentBooking }}
             />
           )}
 

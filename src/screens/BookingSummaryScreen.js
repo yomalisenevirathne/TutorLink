@@ -9,6 +9,7 @@ import {
   StatusBar,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { createBookingInDb } from '../bookingService';
@@ -23,7 +24,39 @@ export default function BookingSummaryScreen({
   const [isSuccessModalVisible, setIsSuccessModalVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Dynamic Data
+  // Dynamic Tutor Data from Search / Discovery Selection
+  const tutorName =
+    currentBooking?.tutor?.name ||
+    currentBooking?.tutorName ||
+    currentBooking?.tutor_name ||
+    'Sarith Samarakoon';
+
+  const tutorRole =
+    currentBooking?.tutor?.role ||
+    currentBooking?.tutor?.university ||
+    (currentBooking?.tutor?.yearOfStudy ? `Year ${currentBooking?.tutor?.yearOfStudy} Student` : 'University Tutor');
+
+  const tutorRating =
+    currentBooking?.tutor?.rating ||
+    currentBooking?.tutor?.avgRating ||
+    '4.9';
+
+  const tutorReviews =
+    currentBooking?.tutor?.reviewCount ||
+    currentBooking?.tutor?.reviewsCount ||
+    '28';
+
+  const tutorPhotoUrl = currentBooking?.tutor?.photoUrl;
+
+  const subject =
+    currentBooking?.subject ||
+    currentBooking?.tutor?.subject ||
+    (Array.isArray(currentBooking?.tutor?.subjects)
+      ? (currentBooking.tutor.subjects[0]?.subjectName || currentBooking.tutor.subjects[0])
+      : null) ||
+    'Data Structures & Algorithms';
+
+  // Dynamic Booking Schedule & Preferences
   const now = new Date();
   const year = currentBooking?.year || now.getFullYear();
   const month = currentBooking?.month !== undefined ? currentBooking?.month : now.getMonth();
@@ -38,10 +71,12 @@ export default function BookingSummaryScreen({
   ];
   const displayMonth = monthNames[month] || 'Sep';
 
+  const baseRate = Number(currentBooking?.tutor?.hourlyRate || currentBooking?.tutor?.fee || 700);
+
   const defaultPlans = {
-    private: { title: '1-on-1 Private', fee: 1200 },
-    small: { title: 'Small Group (2-5)', fee: 700 },
-    large: { title: 'Large Group (6-10)', fee: 400 },
+    private: { title: '1-on-1 Private', fee: Math.round(baseRate * 1.7) },
+    small: { title: 'Small Group (2-5)', fee: baseRate },
+    large: { title: 'Large Group (6-10)', fee: Math.round(baseRate * 0.57) },
   };
 
   const plan = (groupPlans && groupPlans[groupSize]) || defaultPlans[groupSize] || defaultPlans.small;
@@ -54,8 +89,8 @@ export default function BookingSummaryScreen({
     setIsSubmitting(true);
     try {
       const bookingPayload = {
-        tutor_name: 'Sarith Samarakoon',
-        subject: 'Data Structures & Algorithms',
+        tutor_name: tutorName,
+        subject: subject,
         year: Number(year),
         month: Number(month) + 1, // 1-indexed for Supabase
         date: Number(date),
@@ -71,16 +106,15 @@ export default function BookingSummaryScreen({
 
       // 1. Insert into Supabase bookings table
       const savedBooking = await createBookingInDb(bookingPayload);
-
       const savedId = savedBooking?.id || `booking-${Date.now()}`;
 
       // 2. Update local state in App.js for instant UI/capacity sync
       if (onConfirm) {
         onConfirm({
           id: savedId,
-          tutorName: 'Sarith Samarakoon',
-          tutor_name: 'Sarith Samarakoon',
-          subject: 'Data Structures & Algorithms',
+          tutorName: tutorName,
+          tutor_name: tutorName,
+          subject: subject,
           year,
           month,
           date,
@@ -90,8 +124,10 @@ export default function BookingSummaryScreen({
           mode,
           total_fee: total,
           totalFee: total,
-          fee: total,
+          session_fee: sessionFee,
+          platform_fee: platformFee,
           status: 'Confirmed',
+          tutor: currentBooking?.tutor,
         });
       }
 
@@ -130,17 +166,23 @@ export default function BookingSummaryScreen({
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Tutor Profile Card */}
+        {/* Dynamic Tutor Profile Card */}
         <View style={styles.tutorCard}>
           <View style={styles.tutorAvatar}>
-            <Ionicons name="person" size={28} color="#6A1B9A" />
+            {tutorPhotoUrl ? (
+              <Image source={{ uri: tutorPhotoUrl }} style={styles.avatarImage} />
+            ) : (
+              <Ionicons name="person" size={28} color="#6A1B9A" />
+            )}
           </View>
           <View style={styles.tutorInfo}>
-            <Text style={styles.tutorName}>Sarith Samarakoon</Text>
-            <Text style={styles.tutorRole}>4th Year IT Student</Text>
+            <Text style={styles.tutorName}>{tutorName}</Text>
+            <Text style={styles.tutorRole}>{tutorRole}</Text>
             <View style={styles.ratingRow}>
               <Ionicons name="star" size={14} color="#D97706" />
-              <Text style={styles.ratingText}> 4.9 (28 Reviews)</Text>
+              <Text style={styles.ratingText}>
+                {' '}{tutorRating} ({tutorReviews} Reviews)
+              </Text>
             </View>
           </View>
         </View>
@@ -156,7 +198,7 @@ export default function BookingSummaryScreen({
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Time</Text>
-            <Text style={styles.detailValue}>{slot} – 7:00 PM</Text>
+            <Text style={styles.detailValue}>{slot}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Mode</Text>
@@ -173,7 +215,7 @@ export default function BookingSummaryScreen({
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Subject</Text>
             <Text style={[styles.detailValue, styles.subjectText]}>
-              Data Structures & Algorithms
+              {subject}
             </Text>
           </View>
         </View>
@@ -222,7 +264,7 @@ export default function BookingSummaryScreen({
       {/* Booking Confirmed Modal */}
       <BookingSuccessModal
         visible={isSuccessModalVisible}
-        bookingDetails={{ date, slot }}
+        bookingDetails={{ date, slot, tutorName }}
         onGoToBookings={() => {
           setIsSuccessModalVisible(false);
           navigation?.navigate('MyBookingsScreen');
@@ -268,6 +310,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
   },
   tutorInfo: { flex: 1 },
   tutorName: { fontSize: 16, fontWeight: '700', color: '#111827' },
@@ -325,14 +373,4 @@ const styles = StyleSheet.create({
     marginTop: 22,
   },
   payBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-  },
-  navItem: { alignItems: 'center' },
-  navLabel: { fontSize: 11, fontWeight: '600', color: '#1F2937', marginTop: 3 },
 });

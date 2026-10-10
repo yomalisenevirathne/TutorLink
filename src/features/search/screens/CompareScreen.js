@@ -114,6 +114,18 @@ export function CompareScreen({ navigation }) {
         tutorId: t?.id,
         tutorName: t?.name,
         subject: (t?.subjects?.[0]?.subjectName || t?.subjects?.[0] || 'General Tutoring'),
+        tutor: {
+          id: t?.id,
+          name: t?.name,
+          subject: (t?.subjects?.[0]?.subjectName || t?.subjects?.[0] || 'General Tutoring'),
+          role: `${t?.university || 'University'} · Year ${t?.yearOfStudy || 1}`,
+          university: t?.university,
+          rating: t?.avgRating || '4.9',
+          reviewCount: t?.reviewCount || 28,
+          hourlyRate: t?.hourlyRate || 700,
+          fee: t?.hourlyRate || 700,
+          photoUrl: t?.photoUrl,
+        },
     });
 
     return (<SafeAreaView style={styles.safe} edges={['top']}>

@@ -23,6 +23,18 @@ export const fetchAllBookings = async () => {
   }
 };
 
+const isValidDbId = (id) =>
+  typeof id === 'number' ||
+  (typeof id === 'string' &&
+    (/^\d+$/.test(id) ||
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)));
+
+const normalizeSlot = (s) => {
+  if (!s) return '';
+  const firstPart = s.split(' - ')[0].split(' – ')[0].trim().toLowerCase();
+  return firstPart.replace(/^0/, '');
+};
+
 // 2. Fetch live capacity for a specific date and time slot from Supabase
 export const fetchCapacityForSlot = async (year, month, date, slot) => {
   const result = {
@@ -34,8 +46,7 @@ export const fetchCapacityForSlot = async (year, month, date, slot) => {
   try {
     const { data, error } = await supabase
       .from('bookings')
-      .select('*')
-      .neq('status', 'Cancelled');
+      .select('*');
 
     if (error) {
       console.error('Error fetching capacity bookings:', error.message || error);
@@ -44,11 +55,17 @@ export const fetchCapacityForSlot = async (year, month, date, slot) => {
 
     const allBookings = data || [];
     const targetYear = Number(year);
-    const targetMonth0 = Number(month);
-    const targetMonth1 = Number(month) + 1;
+    const targetMonth0 = Number(month); // e.g. 9 for October (0-indexed)
+    const targetMonth1 = Number(month) + 1; // e.g. 10 for October (1-indexed)
     const targetDate = Number(date);
+    const targetSlotClean = normalizeSlot(slot);
 
     const matching = allBookings.filter((b) => {
+      // Must be Confirmed and NOT Cancelled
+      const bStatus = (b.status || 'Confirmed').toString().trim().toLowerCase();
+      if (bStatus === 'cancelled' || bStatus === 'canceled') return false;
+      if (bStatus !== 'confirmed') return false;
+
       const bYear = Number(b.year);
       const bMonth = Number(b.month);
       const bDate = Number(b.date);
@@ -57,15 +74,14 @@ export const fetchCapacityForSlot = async (year, month, date, slot) => {
       const monthMatches = !bMonth || bMonth === targetMonth0 || bMonth === targetMonth1;
       const dateMatches = bDate === targetDate;
 
-      const slotMatches =
-        (b.slot && b.slot.trim().toLowerCase() === (slot || '').trim().toLowerCase()) ||
-        (b.time && b.time.trim().toLowerCase() === (slot || '').trim().toLowerCase());
+      const bSlotClean = normalizeSlot(b.slot || b.booking_time || b.time);
+      const slotMatches = bSlotClean === targetSlotClean;
 
       return yearMatches && monthMatches && dateMatches && slotMatches;
     });
 
     matching.forEach((b) => {
-      const groupSize = (b.group_size || b.groupSize || '').toLowerCase();
+      const groupSize = (b.group_size || b.groupSize || '').toString().toLowerCase();
       if (groupSize === 'private') {
         result.privateBooked = true;
       } else if (groupSize === 'small') {
@@ -88,13 +104,18 @@ export const createBookingInDb = async (payload) => {
   const sessionFee = Number(payload.session_fee || payload.sessionFee || Math.max(0, totalFee - 50));
   const platformFee = Number(payload.platform_fee || payload.platformFee || 50);
 
+  const targetMonth =
+    payload.month !== undefined && payload.month !== null
+      ? Number(payload.month)
+      : (new Date().getMonth() + 1);
+
   const insertData = {
     tutor_name: payload.tutor_name || payload.tutorName || 'Sarith Samarakoon',
     subject: payload.subject || 'Data Structures & Algorithms',
     year: Number(payload.year) || new Date().getFullYear(),
-    month: Number(payload.month) || (new Date().getMonth() + 1),
+    month: targetMonth,
     date: Number(payload.date || payload.day) || new Date().getDate(),
-    slot: payload.slot || payload.time || '6:00 PM',
+    slot: payload.slot || '6:00 PM',
     mode: payload.mode || 'physical',
     group_size: payload.groupSize || payload.group_size || 'small',
     total_fee: totalFee,
@@ -115,35 +136,55 @@ export const createBookingInDb = async (payload) => {
   return data ? data[0] : null;
 };
 
-// 4. Booking ekak Cancel kirima
-export const cancelBookingInDb = async (bookingId) => {
+// 4. Booking status update kirima (e.g. 'Completed' or 'Cancelled')
+export const updateBookingStatusInDb = async (bookingId, newStatus) => {
   try {
-    const { error } = await supabase
-      .from('bookings')
-      .update({ status: 'Cancelled' })
-      .eq('id', bookingId);
+    if (!bookingId || !isValidDbId(bookingId)) {
+      return { id: bookingId, status: newStatus };
+    }
 
-    if (error) throw error;
-    return { success: true };
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({ status: newStatus })
+      .eq('id', bookingId)
+      .select();
+
+    if (error) {
+      console.error('SUPABASE STATUS UPDATE ERROR:', error);
+      throw error;
+    }
+    return data && data.length > 0 ? data[0] : null;
   } catch (error) {
-    console.error('Error cancelling booking:', error?.message || error);
-    return { success: false, error };
+    console.error('SUPABASE STATUS UPDATE ERROR:', error);
+    throw error;
   }
 };
 
-// 5. Booking record ekak Supabase ekෙන් delete kirima
+// 5. Booking ekak Cancel kirima (Legacy / Helper)
+export const cancelBookingInDb = async (bookingId) => {
+  return updateBookingStatusInDb(bookingId, 'Cancelled');
+};
+
+// 6. Booking record ekak Supabase ekෙන් delete kirima
 export const deleteBookingFromDb = async (bookingId) => {
   try {
+    if (!bookingId || !isValidDbId(bookingId)) {
+      return true;
+    }
+
     const { error } = await supabase
       .from('bookings')
       .delete()
       .eq('id', bookingId);
 
-    if (error) throw error;
-    return { success: true };
+    if (error) {
+      console.error('SUPABASE DELETE ERROR:', error);
+      throw error;
+    }
+    return true;
   } catch (error) {
-    console.error('Error deleting booking:', error?.message || error);
-    return { success: false, error };
+    console.error('SUPABASE DELETE ERROR:', error);
+    throw error;
   }
 };
 
@@ -313,6 +354,7 @@ export default {
   fetchCapacityForSlot,
   createBookingInDb,
   cancelBookingInDb,
+  updateBookingStatusInDb,
   deleteBookingFromDb,
   checkSlotConflict,
   saveTutorSessionToDb,

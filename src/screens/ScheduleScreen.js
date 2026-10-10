@@ -8,14 +8,14 @@ import {
   SafeAreaView,
   StatusBar,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { fetchActiveTutorSessionDates } from '../bookingService';
+import { supabase } from '../utils/supabase';
 
 export default function ScheduleScreen({
   navigation,
   currentBooking,
-  getCapacityForSlot,
   currentUser,
 }) {
   const now = new Date();
@@ -28,46 +28,126 @@ export default function ScheduleScreen({
   const [selectedDay, setSelectedDay] = useState(
     currentBooking?.date || now.getDate()
   );
-  const [selectedSlot, setSelectedSlot] = useState(
-    currentBooking?.slot || '6:00 PM'
-  );
+  const [selectedSlot, setSelectedSlot] = useState(null);
 
-  // Active tutor sessions from Database
+  // Active tutor session dates for calendar highlights
   const [activeSessionDates, setActiveSessionDates] = useState([]);
+  
+  // Real dynamic slots fetched from Supabase `tutor_sessions` for the chosen tutor and date
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
 
-  // 💡 SECRET DOUBLE-TAP LOGIC: Header title එක 2 පාරක් tap කරද්දී ManageSessionScreen එකට යයි
-  const [lastTap, setLastTap] = useState(0);
-  const handleHeaderDoubleTap = () => {
-    const currentTime = Date.now();
-    if (currentTime - lastTap < 400) {
-      navigation?.navigate('ManageSessionScreen');
-    } else {
-      setLastTap(currentTime);
-    }
-  };
+  // Get active tutor name from currentBooking or fallback
+  const currentTutorName = 
+    currentBooking?.tutorName || 
+    currentBooking?.tutor_name || 
+    currentBooking?.tutor?.name || 
+    'Pamoda Dissanayak';
 
+  // 1. Fetch active session dates for this specific tutor in the current month (Case-insensitive matching)
   useEffect(() => {
     let isMounted = true;
-    const loadSessionDates = async () => {
+    const loadTutorDates = async () => {
       try {
-        if (fetchActiveTutorSessionDates) {
-          const dates = await fetchActiveTutorSessionDates(currentYear, currentMonth + 1);
-          if (isMounted) {
-            setActiveSessionDates(dates || []);
-          }
+        const { data, error } = await supabase
+          .from('tutor_sessions')
+          .select('date, tutor_name')
+          .eq('year', Number(currentYear))
+          .eq('month', Number(currentMonth + 1))
+          .eq('is_accepting_bookings', true);
+
+        if (!error && data) {
+          const targetTutor = (currentTutorName || '').trim().toLowerCase();
+          
+          const filteredData = targetTutor 
+            ? data.filter(item => (item.tutor_name || '').trim().toLowerCase().includes(targetTutor))
+            : data;
+
+          const dates = [...new Set(filteredData.map((item) => Number(item.date)).filter(Boolean))];
+          if (isMounted) setActiveSessionDates(dates);
+        } else {
+          if (isMounted) setActiveSessionDates([]);
         }
       } catch (e) {
-        console.log('Error loading tutor session dates:', e);
-        if (isMounted) {
-          setActiveSessionDates([]);
-        }
+        console.log('Error loading tutor dates:', e);
+        if (isMounted) setActiveSessionDates([]);
       }
     };
-    loadSessionDates();
+    loadTutorDates();
     return () => {
       isMounted = false;
     };
-  }, [currentYear, currentMonth]);
+  }, [currentYear, currentMonth, currentTutorName]);
+
+  // 2. Fetch actual configured slots from `tutor_sessions` for this tutor on the selected day
+  useEffect(() => {
+    let isMounted = true;
+    const loadSlotsForDay = async () => {
+      if (!selectedDay) return;
+      setLoadingSlots(true);
+      try {
+        const targetTutor = (currentTutorName || '').trim().toLowerCase();
+        
+        const { data, error } = await supabase
+          .from('tutor_sessions')
+          .select('slots, tutor_name')
+          .eq('year', Number(currentYear))
+          .eq('month', Number(currentMonth + 1))
+          .eq('date', Number(selectedDay))
+          .eq('is_accepting_bookings', true);
+
+        if (error) {
+          console.error('Error fetching tutor slots:', error);
+          if (isMounted) setAvailableSlots([]);
+        } else if (data && data.length > 0) {
+          const filteredData = targetTutor
+            ? data.filter(item => (item.tutor_name || '').trim().toLowerCase().includes(targetTutor))
+            : data;
+
+          let allSlots = [];
+          filteredData.forEach(session => {
+            if (session.slots && Array.isArray(session.slots)) {
+              allSlots = [...allSlots, ...session.slots];
+            }
+          });
+          
+          // Safety net: if strict name match gave 0 slots, show all slots for that day
+          if (allSlots.length === 0 && data.length > 0) {
+            data.forEach(session => {
+              if (session.slots && Array.isArray(session.slots)) {
+                allSlots = [...allSlots, ...session.slots];
+              }
+            });
+          }
+
+          const uniqueSlots = [...new Set(allSlots)];
+          if (isMounted) {
+            setAvailableSlots(uniqueSlots);
+            if (uniqueSlots.length > 0) {
+              setSelectedSlot(uniqueSlots[0]);
+            } else {
+              setSelectedSlot(null);
+            }
+          }
+        } else {
+          if (isMounted) {
+            setAvailableSlots([]);
+            setSelectedSlot(null);
+          }
+        }
+      } catch (err) {
+        console.error('Exception loading slots:', err);
+        if (isMounted) setAvailableSlots([]);
+      } finally {
+        if (isMounted) setLoadingSlots(false);
+      }
+    };
+
+    loadSlotsForDay();
+    return () => {
+      isMounted = false;
+    };
+  }, [currentYear, currentMonth, selectedDay, currentTutorName]);
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -122,23 +202,6 @@ export default function ScheduleScreen({
     }
   };
 
-  const morningTimes = ['8:00 AM', '9:00 AM', '10:00 AM'];
-  const afternoonTimes = ['1:00 PM', '2:00 PM', '3:00 PM'];
-  const eveningTimes = ['5:00 PM', '6:00 PM', '7:00 PM'];
-
-  const checkSlotStatus = (time) => {
-    if (!selectedDay || !getCapacityForSlot) return { isBooked: false };
-    const cap = getCapacityForSlot(currentYear, currentMonth, selectedDay, time);
-    const isBooked = cap.privateBooked || (cap.smallBookedCount >= 5 && cap.largeBookedCount >= 10);
-    return { isBooked };
-  };
-
-  const handleSlotSelect = (time, isBooked) => {
-    if (!isBooked) {
-      setSelectedSlot(time);
-    }
-  };
-
   const handleContinue = () => {
     if (!selectedDay) {
       Alert.alert('Date Required', 'Please select a date from the calendar.');
@@ -149,7 +212,7 @@ export default function ScheduleScreen({
       return;
     }
     if (!selectedSlot) {
-      Alert.alert('Slot Required', 'Please select a time slot.');
+      Alert.alert('Slot Required', 'Please select an available time slot.');
       return;
     }
 
@@ -159,36 +222,9 @@ export default function ScheduleScreen({
       monthName: monthNames[currentMonth],
       date: selectedDay,
       slot: selectedSlot,
+      tutorName: currentTutorName,
+      tutor: currentBooking?.tutor,
     });
-  };
-
-  const renderSlotButton = (time) => {
-    const { isBooked } = checkSlotStatus(time);
-    const isSelected = selectedSlot === time;
-
-    return (
-      <TouchableOpacity
-        key={time}
-        disabled={isBooked}
-        style={[
-          styles.slotButton,
-          isBooked && styles.bookedSlotButton,
-          isSelected && !isBooked && styles.selectedSlotButton,
-        ]}
-        onPress={() => handleSlotSelect(time, isBooked)}
-        activeOpacity={0.8}
-      >
-        <Text
-          style={[
-            styles.slotText,
-            isBooked && styles.bookedSlotText,
-            isSelected && !isBooked && styles.selectedSlotText,
-          ]}
-        >
-          {isBooked ? `${time} (Booked)` : time}
-        </Text>
-      </TouchableOpacity>
-    );
   };
 
   return (
@@ -199,17 +235,12 @@ export default function ScheduleScreen({
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.headerIconBtn}
-          onPress={() => navigation?.goBack ? navigation.goBack() : navigation?.navigate('studentProfile')}
+          onPress={() => navigation?.goBack ? navigation.goBack() : navigation?.navigate('SearchHomeScreen')}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
-
-        {/* 💡 SECRET DOUBLE-TAP TITLE (Double-tap to open ManageSessionScreen) */}
-        <TouchableOpacity onPress={handleHeaderDoubleTap} activeOpacity={0.85}>
-          <Text style={styles.headerTitle}>Schedule Selection</Text>
-        </TouchableOpacity>
-
+        <Text style={styles.headerTitle}>Schedule Selection</Text>
         <View style={styles.headerRightIcons}>
           <TouchableOpacity style={{ marginRight: 14 }}>
             <Ionicons name="notifications" size={22} color="#FFFFFF" />
@@ -221,13 +252,18 @@ export default function ScheduleScreen({
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Selected Tutor Banner */}
+        <View style={styles.tutorBanner}>
+          <Ionicons name="school" size={16} color="#6A1B9A" style={{ marginRight: 6 }} />
+          <Text style={styles.tutorBannerText}>Booking with: <Text style={{ fontWeight: '800' }}>{currentTutorName}</Text></Text>
+        </View>
+
         <Text style={styles.sectionHeading}>Select Date</Text>
 
-        {/* Legend: Available Classes (Only if database has sessions) */}
         {activeSessionDates.length > 0 && (
           <View style={styles.legendIndicatorRow}>
             <View style={styles.legendDot} />
-            <Text style={styles.legendText}>Available Classes</Text>
+            <Text style={styles.legendText}>Available Classes for {currentTutorName}</Text>
           </View>
         )}
 
@@ -309,17 +345,46 @@ export default function ScheduleScreen({
           </View>
         </View>
 
-        {/* Available Time Slots Section */}
+        {/* Available Time Slots Section (Dynamic from Database) */}
         <Text style={[styles.sectionHeading, { marginTop: 22 }]}>Available Time Slots</Text>
 
-        <Text style={styles.slotGroupTitle}>Morning</Text>
-        <View style={styles.slotRow}>{morningTimes.map(renderSlotButton)}</View>
-
-        <Text style={styles.slotGroupTitle}>Afternoon</Text>
-        <View style={styles.slotRow}>{afternoonTimes.map(renderSlotButton)}</View>
-
-        <Text style={styles.slotGroupTitle}>Evening</Text>
-        <View style={styles.slotRow}>{eveningTimes.map(renderSlotButton)}</View>
+        {loadingSlots ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color="#6A1B9A" />
+            <Text style={styles.loadingText}>Loading available slots...</Text>
+          </View>
+        ) : availableSlots.length > 0 ? (
+          <View style={styles.slotRow}>
+            {availableSlots.map((time) => {
+              const isSelected = selectedSlot === time;
+              return (
+                <TouchableOpacity
+                  key={time}
+                  style={[
+                    styles.slotButton,
+                    isSelected && styles.selectedSlotButton,
+                  ]}
+                  onPress={() => setSelectedSlot(time)}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[
+                      styles.slotText,
+                      isSelected && styles.selectedSlotText,
+                    ]}
+                  >
+                    {time}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.emptySlotCard}>
+            <Ionicons name="calendar-outline" size={24} color="#9CA3AF" style={{ marginBottom: 4 }} />
+            <Text style={styles.emptySlotText}>No time slots configured by {currentTutorName} for this date.</Text>
+          </View>
+        )}
 
         {/* Primary Continue Button */}
         <TouchableOpacity
@@ -339,39 +404,6 @@ export default function ScheduleScreen({
           <Text style={styles.myBookingsBtnText}>Go to My Bookings</Text>
         </TouchableOpacity>
       </ScrollView>
-
-      {/* Bottom Nav */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation?.navigate('studentProfile')}
-        >
-          <Ionicons name="home-outline" size={22} color="#1F2937" />
-          <Text style={styles.navLabel}>Home</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation?.navigate('ScheduleScreen')}
-        >
-          <Ionicons name="calendar" size={22} color="#D48B06" />
-          <Text style={[styles.navLabel, { color: '#D48B06' }]}>Bookings</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="chatbubble-outline" size={22} color="#1F2937" />
-          <Text style={styles.navLabel}>Messages</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="wallet-outline" size={22} color="#1F2937" />
-          <Text style={styles.navLabel}>Payments</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation?.navigate('studentProfile')}
-        >
-          <Ionicons name="person-outline" size={22} color="#1F2937" />
-          <Text style={styles.navLabel}>Account</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }
@@ -390,6 +422,22 @@ const styles = StyleSheet.create({
   headerTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
   headerRightIcons: { flexDirection: 'row', alignItems: 'center' },
   scrollContent: { paddingHorizontal: 16, paddingBottom: 30 },
+  tutorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3E8FF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+  },
+  tutorBannerText: {
+    fontSize: 13,
+    color: '#6A1B9A',
+    fontWeight: '600',
+  },
   sectionHeading: {
     fontSize: 16,
     fontWeight: '700',
@@ -462,32 +510,45 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   sessionDotSelected: { backgroundColor: '#FFFFFF' },
-  slotGroupTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#4B5563',
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  slotRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  slotRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   slotButton: {
     backgroundColor: '#D48B06',
     borderRadius: 8,
     paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 95,
-  },
-  bookedSlotButton: {
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    minWidth: 110,
   },
   selectedSlotButton: { backgroundColor: '#6A1B9A' },
   slotText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
-  bookedSlotText: { color: '#9CA3AF', textDecorationLine: 'line-through' },
   selectedSlotText: { color: '#FFFFFF' },
+  loadingContainer: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  emptySlotCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptySlotText: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
   continueBtn: {
     backgroundColor: '#D48B06',
     borderRadius: 10,
@@ -504,14 +565,4 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   myBookingsBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-  },
-  navItem: { alignItems: 'center' },
-  navLabel: { fontSize: 11, fontWeight: '600', color: '#1F2937', marginTop: 3 },
 });

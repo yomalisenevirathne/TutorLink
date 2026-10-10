@@ -12,7 +12,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { fetchAllBookings, cancelBookingInDb, deleteBookingFromDb } from '../bookingService';
+import {
+  fetchAllBookings,
+  cancelBookingInDb,
+  updateBookingStatusInDb,
+  deleteBookingFromDb,
+} from '../bookingService';
 
 export default function MyBookingsScreen({
   navigation,
@@ -71,7 +76,7 @@ export default function MyBookingsScreen({
     return `Date: ${item.date || '15'}`;
   };
 
-  // Cancel Booking Handler
+  // Cancel Booking Handler (Persists delete/cancellation to Supabase)
   const handleCancel = (id, tutor) => {
     Alert.alert(
       'Cancel Booking',
@@ -82,19 +87,25 @@ export default function MyBookingsScreen({
           text: 'Yes, Cancel',
           style: 'destructive',
           onPress: async () => {
-            if (onCancelBooking) {
-              onCancelBooking(id);
+            try {
+              const bookingItem = localBookings.find((item) => item.id === id);
+              await deleteBookingFromDb(id);
+              if (onCancelBooking) {
+                onCancelBooking(id, bookingItem);
+              }
+              setLocalBookings((prev) => prev.filter((item) => item.id !== id));
+              Alert.alert('Session Cancelled', 'Your booking has been cancelled and removed.');
+            } catch (err) {
+              console.error('Error cancelling booking:', err);
+              Alert.alert('Error', 'Failed to cancel booking. Please try again.');
             }
-            setLocalBookings((prev) => prev.filter((item) => item.id !== id));
-            await cancelBookingInDb(id);
-            Alert.alert('Session Cancelled', 'Your booking has been cancelled.');
           },
         },
       ]
     );
   };
 
-  // Mark as Completed Handler (for lifecycle and moving to Past tab)
+  // Mark as Completed Handler (Updates status in Supabase and moves to Past tab)
   const handleMarkCompleted = (id, tutor) => {
     Alert.alert(
       'Complete Session',
@@ -103,13 +114,20 @@ export default function MyBookingsScreen({
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Mark Completed',
-          onPress: () => {
-            if (onCompleteBooking) {
-              onCompleteBooking(id);
+          onPress: async () => {
+            try {
+              await updateBookingStatusInDb(id, 'Completed');
+              if (onCompleteBooking) {
+                onCompleteBooking(id);
+              }
+              setLocalBookings((prev) =>
+                prev.map((item) => (item.id === id ? { ...item, status: 'Completed' } : item))
+              );
+              Alert.alert('Session Completed', 'The session has been marked as completed.');
+            } catch (err) {
+              console.error('Error completing booking:', err);
+              Alert.alert('Error', 'Failed to update session status.');
             }
-            setLocalBookings((prev) =>
-              prev.map((item) => (item.id === id ? { ...item, status: 'Completed' } : item))
-            );
           },
         },
       ]
@@ -127,12 +145,18 @@ export default function MyBookingsScreen({
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            if (onDeleteBooking) {
-              onDeleteBooking(id);
+            try {
+              const bookingItem = localBookings.find((item) => item.id === id);
+              await deleteBookingFromDb(id);
+              if (onDeleteBooking) {
+                onDeleteBooking(id, bookingItem);
+              }
+              setLocalBookings((prev) => prev.filter((item) => item.id !== id));
+              Alert.alert('Deleted', 'Past session record has been permanently removed.');
+            } catch (err) {
+              console.error('Error deleting booking record:', err);
+              Alert.alert('Error', 'Failed to delete record from database.');
             }
-            setLocalBookings((prev) => prev.filter((item) => item.id !== id));
-            await deleteBookingFromDb(id);
-            Alert.alert('Deleted', 'Past session record has been permanently removed.');
           },
         },
       ]
@@ -604,15 +628,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   scheduleNewBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-  },
-  navItem: { alignItems: 'center' },
-  navLabel: { fontSize: 11, fontWeight: '600', color: '#1F2937', marginTop: 3 },
 });

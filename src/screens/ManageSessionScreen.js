@@ -1,5 +1,4 @@
-// src/screens/ManageSessionScreen.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,17 +15,29 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { checkSlotConflict, saveTutorSessionToDb, saveTutorSession } from '../bookingService';
+import { supabase } from '../utils/supabase';
+import { checkSlotConflict, saveTutorSessionToDb } from '../bookingService';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-export default function ManageSessionScreen({ navigation, currentUser }) {
-  const tutorName = currentUser?.fullName || 'Sarith Samarakoon';
+const TUTOR_LIST = [
+  'Pamoda Dissanayak',
+  'Sarith Samarakoon',
+  'Tharushi Nethmini',
+  'Sathsara Illankoon',
+  'Asanka Ekanayaka',
+];
 
-  // 1. Course Info State (Editable)
+export default function ManageSessionScreen({ navigation, currentUser }) {
+  const [selectedTutor, setSelectedTutor] = useState(
+    currentUser?.fullName || TUTOR_LIST[0]
+  );
+  const [isTutorDropdownOpen, setIsTutorDropdownOpen] = useState(false);
+
+  // Course Info State
   const [courseTitle, setCourseTitle] = useState('Data Structures & Algorithms');
   const [courseCode, setCourseCode] = useState('CS204');
   const [courseSubtitle, setCourseSubtitle] = useState('CS204 • Year 2 Semester 1');
@@ -37,10 +48,9 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
   const [editCourseCode, setEditCourseCode] = useState('');
   const [editCourseSubtitle, setEditCourseSubtitle] = useState('');
 
-  // Dynamic CS Badge text from Course Code prefix
   const csBadgeText = (courseCode.match(/[a-zA-Z]+/)?.[0] || 'CS').substring(0, 3).toUpperCase();
 
-  // 2. Dynamic Schedule Dates (6-day horizontal strip starting from today)
+  // Dynamic Schedule Dates (6-day horizontal strip starting from today)
   const generateUpcomingDays = () => {
     const days = [];
     const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -61,24 +71,11 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
   const [scheduleDays] = useState(generateUpcomingDays());
   const [selectedDay, setSelectedDay] = useState(new Date().getDate());
 
-  // Dynamic Month & Year badge based on selected day
-  const selectedDayObj = scheduleDays.find((d) => d.date === selectedDay) || scheduleDays[0] || {
-    fullDate: new Date(),
-    date: new Date().getDate(),
-    month: new Date().getMonth(),
-    year: new Date().getFullYear(),
-  };
+  const selectedDayObj = scheduleDays.find((d) => d.date === selectedDay) || scheduleDays[0];
   const displayMonthYear = `${MONTH_NAMES[selectedDayObj.fullDate.getMonth()]} ${selectedDayObj.fullDate.getFullYear()}`;
 
-  // 3. Configured Time Slots
-  const [configuredSlots, setConfiguredSlots] = useState([
-    {
-      id: 'slot-1',
-      time: '8:00 AM - 9:00 AM',
-      period: 'Morning',
-      bookingsCount: 0,
-    },
-  ]);
+  // Configured Time Slots
+  const [configuredSlots, setConfiguredSlots] = useState([]);
 
   // Modal to add new slot
   const [isAddSlotModalVisible, setIsAddSlotModalVisible] = useState(false);
@@ -92,21 +89,70 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
   ];
 
   // Session Mode & Venue
-  const [sessionMode, setSessionMode] = useState('physical'); // 'online' | 'physical'
+  const [sessionMode, setSessionMode] = useState('physical');
   const [venueAddress, setVenueAddress] = useState(
     'SLIIT Malabe Campus, Block E - Lab 401'
   );
 
   // Capacity & Pricing
   const [maxCapacity, setMaxCapacity] = useState(5);
-  const [bookedCount] = useState(2);
+  const [bookedCount] = useState(0);
   const seatsRemaining = Math.max(0, maxCapacity - bookedCount);
   const [sessionFee, setSessionFee] = useState('700');
 
-  // Accepting Bookings Toggle
   const [isAcceptingBookings, setIsAcceptingBookings] = useState(true);
 
-  // Course Edit Modal Handlers
+  // Fetch existing configured sessions from Supabase when Tutor or Date changes
+  useEffect(() => {
+    let isMounted = true;
+    const fetchTutorExistingSession = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('tutor_sessions')
+          .select('*')
+          .eq('tutor_name', selectedTutor)
+          .eq('year', selectedDayObj.fullDate.getFullYear())
+          .eq('month', selectedDayObj.fullDate.getMonth() + 1)
+          .eq('date', selectedDay);
+
+        if (!error && data && data.length > 0) {
+          const session = data[0];
+          if (isMounted) {
+            setCourseTitle(session.course_title || 'Data Structures & Algorithms');
+            setCourseCode(session.course_code || 'CS204');
+            setCourseSubtitle(session.course_subtitle || 'CS204 • Active Module');
+            setSessionMode(session.mode || 'physical');
+            setVenueAddress(session.venue || 'SLIIT Malabe Campus, Block E - Lab 401');
+            setMaxCapacity(session.max_capacity || 5);
+            setSessionFee(String(session.fee || 700));
+            setIsAcceptingBookings(session.is_accepting_bookings ?? true);
+
+            if (session.slots && Array.isArray(session.slots)) {
+              const formattedSlots = session.slots.map((sText, idx) => ({
+                id: `db-slot-${idx}`,
+                time: sText,
+                period: sText.includes('AM') ? 'Morning' : 'Afternoon / Evening',
+                bookingsCount: 0,
+              }));
+              setConfiguredSlots(formattedSlots);
+            }
+          }
+        } else {
+          if (isMounted) {
+            setConfiguredSlots([]);
+          }
+        }
+      } catch (err) {
+        console.log('Error loading tutor session from DB:', err);
+      }
+    };
+
+    fetchTutorExistingSession();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedTutor, selectedDay]);
+
   const handleOpenCourseModal = () => {
     setEditCourseTitle(courseTitle);
     setEditCourseCode(courseCode);
@@ -129,7 +175,6 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
     setIsEditCourseModalVisible(false);
   };
 
-  // Handle adding a new time slot with Conflict Prevention
   const handleSelectNewSlot = async (slotTime) => {
     const alreadyConfigured = configuredSlots.some((s) => s.time === slotTime);
     if (alreadyConfigured) {
@@ -143,7 +188,7 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
       month: selectedDayObj.fullDate.getMonth(),
       date: selectedDay,
       slot: slotStartTime,
-      currentTutorName: tutorName,
+      currentTutorName: selectedTutor,
     });
 
     if (conflictResult?.hasConflict) {
@@ -167,38 +212,56 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
     setIsAddSlotModalVisible(false);
   };
 
-  // Handle deleting a configured time slot
+  // 💡 DATABASE SYNC: Handle deleting a configured time slot and updating Supabase immediately
   const handleDeleteSlot = (slotId) => {
     Alert.alert(
       'Remove Time Slot',
-      'Are you sure you want to remove this time slot?',
+      'Are you sure you want to remove this time slot? This will instantly remove it from the database and student view.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Remove',
           style: 'destructive',
-          onPress: () => {
-            setConfiguredSlots((prev) => prev.filter((s) => s.id !== slotId));
+          onPress: async () => {
+            const updatedSlots = configuredSlots.filter((s) => s.id !== slotId);
+            setConfiguredSlots(updatedSlots);
+
+            try {
+              const sessionData = {
+                tutorName: selectedTutor,
+                courseTitle,
+                courseCode,
+                courseSubtitle,
+                selectedDay,
+                date: selectedDay,
+                month: selectedDayObj.fullDate.getMonth() + 1,
+                year: selectedDayObj.fullDate.getFullYear(),
+                slots: updatedSlots.map((s) => s.time),
+                mode: sessionMode,
+                venue: sessionMode === 'physical' ? venueAddress : 'Online Zoom/Meet',
+                maxCapacity,
+                fee: Number(sessionFee) || 700,
+                isAcceptingBookings: updatedSlots.length > 0 ? isAcceptingBookings : false,
+              };
+              await saveTutorSessionToDb(sessionData);
+            } catch (err) {
+              console.error('Error updating DB on slot delete:', err);
+              Alert.alert('Update Failed', 'Could not update database after deleting slot.');
+            }
           },
         },
       ]
     );
   };
 
-  // Stepper counter
   const handleDecreaseCapacity = () => {
-    if (maxCapacity > bookedCount && maxCapacity > 1) {
-      setMaxCapacity(maxCapacity - 1);
-    }
+    if (maxCapacity > 1) setMaxCapacity(maxCapacity - 1);
   };
 
   const handleIncreaseCapacity = () => {
-    if (maxCapacity < 20) {
-      setMaxCapacity(maxCapacity + 1);
-    }
+    if (maxCapacity < 20) setMaxCapacity(maxCapacity + 1);
   };
 
-  // Save & Update Session handler
   const handleSaveSession = async () => {
     if (configuredSlots.length === 0) {
       Alert.alert('Slot Required', 'Please configure at least one time slot.');
@@ -206,7 +269,7 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
     }
 
     const sessionData = {
-      tutorName,
+      tutorName: selectedTutor,
       courseTitle,
       courseCode,
       courseSubtitle,
@@ -226,9 +289,7 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
       await saveTutorSessionToDb(sessionData);
       Alert.alert(
         'Session Published ✅',
-        'Your session for date ' +
-          selectedDay +
-          ' has been saved to the database and is now live for students!'
+        `Session configurations for ${selectedTutor} on date ${selectedDay} have been successfully saved to Supabase!`
       );
     } catch (e) {
       console.error('Save session error:', e);
@@ -264,14 +325,47 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        
+        {/* Tutor Selector Dropdown Bar */}
+        <View style={styles.tutorSelectorWrapper}>
+          <Text style={styles.tutorSelectLabel}>SELECT TUTOR:</Text>
+          <TouchableOpacity
+            style={styles.tutorDropdownBtn}
+            onPress={() => setIsTutorDropdownOpen(!isTutorDropdownOpen)}
+            activeOpacity={0.8}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="person-circle-outline" size={20} color="#6A1B9A" style={{ marginRight: 6 }} />
+              <Text style={styles.tutorDropdownBtnText}>{selectedTutor}</Text>
+            </View>
+            <Ionicons name={isTutorDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#6A1B9A" />
+          </TouchableOpacity>
+
+          {isTutorDropdownOpen && (
+            <View style={styles.tutorDropdownList}>
+              {TUTOR_LIST.map((tName) => (
+                <TouchableOpacity
+                  key={tName}
+                  style={[styles.tutorDropdownItem, selectedTutor === tName && styles.tutorDropdownItemActive]}
+                  onPress={() => {
+                    setSelectedTutor(tName);
+                    setIsTutorDropdownOpen(false);
+                  }}
+                >
+                  <Text style={[styles.tutorDropdownItemText, selectedTutor === tName && styles.tutorDropdownItemTextActive]}>
+                    {tName}
+                  </Text>
+                  {selectedTutor === tName && <Ionicons name="checkmark" size={16} color="#6A1B9A" />}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+
         {/* Course & Module Section */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionSmallLabel}>COURSE & MODULE</Text>
-          <TouchableOpacity
-            style={styles.changeLinkBtn}
-            onPress={handleOpenCourseModal}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity style={styles.changeLinkBtn} onPress={handleOpenCourseModal} activeOpacity={0.7}>
             <Ionicons name="pencil" size={13} color="#6A1B9A" style={{ marginRight: 3 }} />
             <Text style={styles.changeLinkText}>Change</Text>
           </TouchableOpacity>
@@ -308,12 +402,8 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
                 onPress={() => setSelectedDay(item.date)}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.dayAbbr, isSelected && styles.dayAbbrSelected]}>
-                  {item.day}
-                </Text>
-                <Text style={[styles.dayNum, isSelected && styles.dayNumSelected]}>
-                  {item.date}
-                </Text>
+                <Text style={[styles.dayAbbr, isSelected && styles.dayAbbrSelected]}>{item.day}</Text>
+                <Text style={[styles.dayNum, isSelected && styles.dayNumSelected]}>{item.date}</Text>
               </TouchableOpacity>
             );
           })}
@@ -325,23 +415,27 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
           <Text style={styles.slotsCountBadge}>{configuredSlots.length} Active Slots</Text>
         </View>
 
-        {configuredSlots.map((slot) => (
-          <View key={slot.id} style={styles.slotCard}>
-            <View style={styles.slotGreenDot} />
-            <View style={styles.slotInfo}>
-              <Text style={styles.slotTimeText}>{slot.time}</Text>
-              <Text style={styles.slotPeriodText}>
-                {slot.period} • {slot.bookingsCount} Bookings
-              </Text>
+        {configuredSlots.length > 0 ? (
+          configuredSlots.map((slot) => (
+            <View key={slot.id} style={styles.slotCard}>
+              <View style={styles.slotGreenDot} />
+              <View style={styles.slotInfo}>
+                <Text style={styles.slotTimeText}>{slot.time}</Text>
+                <Text style={styles.slotPeriodText}>{slot.period} • {slot.bookingsCount} Bookings</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => handleDeleteSlot(slot.id)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="trash-outline" size={19} color="#9CA3AF" />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              onPress={() => handleDeleteSlot(slot.id)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="trash-outline" size={19} color="#9CA3AF" />
-            </TouchableOpacity>
+          ))
+        ) : (
+          <View style={styles.emptySlotNotice}>
+            <Text style={styles.emptySlotNoticeText}>No time slots configured for this date.</Text>
           </View>
-        ))}
+        )}
 
         <TouchableOpacity
           style={styles.addSlotDashedBtn}
@@ -353,68 +447,42 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
         </TouchableOpacity>
 
         {/* Session Mode & Venue */}
-        <Text style={[styles.sectionHeading, { marginTop: 26, marginBottom: 12 }]}>
-          Session Mode & Venue
-        </Text>
+        <Text style={[styles.sectionHeading, { marginTop: 26, marginBottom: 12 }]}>Session Mode & Venue</Text>
 
-        {/* Option 1: Online Session */}
         <TouchableOpacity
           style={[styles.modeCard, sessionMode === 'online' && styles.modeCardSelected]}
           onPress={() => setSessionMode('online')}
           activeOpacity={0.8}
         >
           <View style={styles.modeCardLeft}>
-            <View style={styles.laptopIconBox}>
-              <Ionicons name="laptop-outline" size={22} color="#2563EB" />
-            </View>
+            <View style={styles.laptopIconBox}><Ionicons name="laptop-outline" size={22} color="#2563EB" /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.modeTitle}>Online Session</Text>
               <Text style={styles.modeSubtitle}>Automated Zoom or Google Meet link</Text>
             </View>
           </View>
-          <View
-            style={[
-              styles.radioCircle,
-              sessionMode === 'online' && styles.radioCircleSelected,
-            ]}
-          >
+          <View style={[styles.radioCircle, sessionMode === 'online' && styles.radioCircleSelected]}>
             {sessionMode === 'online' && <View style={styles.radioDot} />}
           </View>
         </TouchableOpacity>
 
-        {/* Option 2: Physical Session */}
         <TouchableOpacity
           style={[styles.modeCard, sessionMode === 'physical' && styles.modeCardSelected]}
           onPress={() => setSessionMode('physical')}
           activeOpacity={0.8}
         >
           <View style={styles.modeCardLeft}>
-            <View style={styles.buildingIconBox}>
-              <Ionicons name="business-outline" size={22} color="#6A1B9A" />
-            </View>
+            <View style={styles.buildingIconBox}><Ionicons name="business-outline" size={22} color="#6A1B9A" /></View>
             <View style={{ flex: 1 }}>
-              <Text
-                style={[
-                  styles.modeTitle,
-                  sessionMode === 'physical' && { color: '#6A1B9A' },
-                ]}
-              >
-                Physical Session
-              </Text>
+              <Text style={[styles.modeTitle, sessionMode === 'physical' && { color: '#6A1B9A' }]}>Physical Session</Text>
               <Text style={styles.modeSubtitle}>At SLIIT Campus, Lab Room 401</Text>
             </View>
           </View>
-          <View
-            style={[
-              styles.radioCircle,
-              sessionMode === 'physical' && styles.radioCircleSelected,
-            ]}
-          >
+          <View style={[styles.radioCircle, sessionMode === 'physical' && styles.radioCircleSelected]}>
             {sessionMode === 'physical' && <View style={styles.radioDot} />}
           </View>
         </TouchableOpacity>
 
-        {/* Editable Venue Address Box if Physical */}
         {sessionMode === 'physical' && (
           <View style={styles.venueInputContainer}>
             <TextInput
@@ -427,10 +495,8 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
           </View>
         )}
 
-        {/* Capacity & Pricing Card */}
-        <Text style={[styles.sectionHeading, { marginTop: 24, marginBottom: 12 }]}>
-          Capacity & Pricing
-        </Text>
+        {/* Capacity & Pricing */}
+        <Text style={[styles.sectionHeading, { marginTop: 24, marginBottom: 12 }]}>Capacity & Pricing</Text>
         <View style={styles.capacityPricingCard}>
           <View style={styles.capacityTopRow}>
             <Text style={styles.capacityLabel}>Group Capacity Limit</Text>
@@ -439,24 +505,14 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
             </View>
           </View>
 
-          {/* Stepper counter row */}
           <View style={styles.stepperRow}>
-            <TouchableOpacity
-              style={styles.stepBtn}
-              onPress={handleDecreaseCapacity}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={styles.stepBtn} onPress={handleDecreaseCapacity} activeOpacity={0.7}>
               <Text style={styles.stepBtnText}>-</Text>
             </TouchableOpacity>
 
             <View style={styles.stepperMiddle}>
               <View style={styles.stepperProgressTrack}>
-                <View
-                  style={[
-                    styles.stepperProgressFill,
-                    { width: `${(bookedCount / maxCapacity) * 100}%` },
-                  ]}
-                />
+                <View style={[styles.stepperProgressFill, { width: `${(bookedCount / maxCapacity) * 100}%` }]} />
               </View>
               <View style={styles.stepperLegendRow}>
                 <Text style={styles.bookedText}>{bookedCount} Booked</Text>
@@ -464,18 +520,13 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
               </View>
             </View>
 
-            <TouchableOpacity
-              style={styles.stepBtn}
-              onPress={handleIncreaseCapacity}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity style={styles.stepBtn} onPress={handleIncreaseCapacity} activeOpacity={0.7}>
               <Text style={styles.stepBtnText}>+</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.divider} />
 
-          {/* Fee per student row */}
           <View style={styles.feeRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.feeLabel}>Session Fee per Student</Text>
@@ -494,9 +545,7 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
 
         {/* Accepting Bookings Toggle Card */}
         <View style={styles.toggleCard}>
-          <View style={styles.warningCircle}>
-            <Text style={styles.warningExclamation}>!</Text>
-          </View>
+          <View style={styles.warningCircle}><Text style={styles.warningExclamation}>!</Text></View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.toggleTitle}>Accepting Bookings</Text>
             <Text style={styles.toggleSubtitle}>Allow students to reserve seats</Text>
@@ -510,11 +559,7 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
         </View>
 
         {/* Bottom Action Buttons */}
-        <TouchableOpacity
-          style={styles.saveSessionBtn}
-          onPress={handleSaveSession}
-          activeOpacity={0.85}
-        >
+        <TouchableOpacity style={styles.saveSessionBtn} onPress={handleSaveSession} activeOpacity={0.85}>
           <Ionicons name="checkmark" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
           <Text style={styles.saveSessionBtnText}>Save & Update Session</Text>
         </TouchableOpacity>
@@ -528,81 +573,41 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* 4. Edit Course & Module Modal */}
+      {/* Edit Course Modal */}
       <Modal visible={isEditCourseModalVisible} transparent animationType="fade">
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeaderRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={styles.modalHeaderIconBadge}>
-                  <Ionicons name="book" size={18} color="#6A1B9A" />
-                </View>
+                <View style={styles.modalHeaderIconBadge}><Ionicons name="book" size={18} color="#6A1B9A" /></View>
                 <Text style={styles.modalTitle}>Edit Course & Module</Text>
               </View>
-              <TouchableOpacity
-                onPress={() => setIsEditCourseModalVisible(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
+              <TouchableOpacity onPress={() => setIsEditCourseModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Ionicons name="close" size={22} color="#4B5563" />
               </TouchableOpacity>
             </View>
-            <Text style={styles.modalSubtitle}>
-              Update your subject, module code, and semester details
-            </Text>
+            <Text style={styles.modalSubtitle}>Update your subject, module code, and semester details</Text>
 
             <ScrollView style={{ maxHeight: 340, marginTop: 12 }} showsVerticalScrollIndicator={false}>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>COURSE / SUBJECT TITLE</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={editCourseTitle}
-                  onChangeText={setEditCourseTitle}
-                  placeholder="e.g. Data Structures & Algorithms"
-                  placeholderTextColor="#9CA3AF"
-                />
+                <TextInput style={styles.textInput} value={editCourseTitle} onChangeText={setEditCourseTitle} placeholder="e.g. Data Structures & Algorithms" placeholderTextColor="#9CA3AF" />
               </View>
-
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>COURSE CODE</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={editCourseCode}
-                  onChangeText={setEditCourseCode}
-                  placeholder="e.g. CS204"
-                  placeholderTextColor="#9CA3AF"
-                  autoCapitalize="characters"
-                />
+                <TextInput style={styles.textInput} value={editCourseCode} onChangeText={setEditCourseCode} placeholder="e.g. CS204" placeholderTextColor="#9CA3AF" autoCapitalize="characters" />
               </View>
-
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>SUBTITLE / SEMESTER DETAILS</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={editCourseSubtitle}
-                  onChangeText={setEditCourseSubtitle}
-                  placeholder="e.g. CS204 • Year 2 Semester 1"
-                  placeholderTextColor="#9CA3AF"
-                />
+                <TextInput style={styles.textInput} value={editCourseSubtitle} onChangeText={setEditCourseSubtitle} placeholder="e.g. CS204 • Year 2 Semester 1" placeholderTextColor="#9CA3AF" />
               </View>
             </ScrollView>
 
             <View style={styles.modalBtnRow}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setIsEditCourseModalVisible(false)}
-                activeOpacity={0.8}
-              >
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setIsEditCourseModalVisible(false)} activeOpacity={0.8}>
                 <Text style={styles.modalCancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.modalSaveBtn}
-                onPress={handleSaveCourseModal}
-                activeOpacity={0.85}
-              >
+              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSaveCourseModal} activeOpacity={0.85}>
                 <Ionicons name="checkmark" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
                 <Text style={styles.modalSaveBtnText}>Save Changes</Text>
               </TouchableOpacity>
@@ -611,30 +616,21 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* 5. Add Slot Quick Modal */}
+      {/* Add Slot Modal */}
       <Modal visible={isAddSlotModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Select Time Slot</Text>
-              <TouchableOpacity
-                onPress={() => setIsAddSlotModalVisible(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
+              <TouchableOpacity onPress={() => setIsAddSlotModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Ionicons name="close" size={22} color="#4B5563" />
               </TouchableOpacity>
             </View>
-            <Text style={styles.modalSubtitle}>
-              Date: {selectedDay} {displayMonthYear}
-            </Text>
+            <Text style={styles.modalSubtitle}>Date: {selectedDay} {displayMonthYear}</Text>
 
             <ScrollView style={{ maxHeight: 280, marginTop: 10 }}>
               {availableSlotOptions.map((opt) => (
-                <TouchableOpacity
-                  key={opt}
-                  style={styles.slotOptionRow}
-                  onPress={() => handleSelectNewSlot(opt)}
-                >
+                <TouchableOpacity key={opt} style={styles.slotOptionRow} onPress={() => handleSelectNewSlot(opt)}>
                   <Text style={styles.slotOptionText}>{opt}</Text>
                   <Ionicons name="add-circle-outline" size={20} color="#6A1B9A" />
                 </TouchableOpacity>
@@ -643,36 +639,6 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
           </View>
         </View>
       </Modal>
-
-      {/* Bottom Nav */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation?.navigate('tutorProfile')}
-        >
-          <Ionicons name="home-outline" size={22} color="#1F2937" />
-          <Text style={styles.navLabel}>Home</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="calendar" size={22} color="#D48B06" />
-          <Text style={[styles.navLabel, { color: '#D48B06' }]}>Bookings</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="chatbubble-outline" size={22} color="#1F2937" />
-          <Text style={styles.navLabel}>Messages</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="wallet-outline" size={22} color="#1F2937" />
-          <Text style={styles.navLabel}>Payments</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation?.navigate('tutorProfile')}
-        >
-          <Ionicons name="person-outline" size={22} color="#1F2937" />
-          <Text style={styles.navLabel}>Account</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }
@@ -691,13 +657,62 @@ const styles = StyleSheet.create({
   headerTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
   headerRightIcons: { flexDirection: 'row', alignItems: 'center' },
   scrollContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 24 },
-
-  // Course Section
+  tutorSelectorWrapper: {
+    backgroundColor: '#FAF5FF',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E9D5FF',
+    padding: 12,
+    marginBottom: 16,
+  },
+  tutorSelectLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#6A1B9A',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  tutorDropdownBtn: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8B4FE',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  tutorDropdownBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  tutorDropdownList: {
+    marginTop: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
+  },
+  tutorDropdownItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  tutorDropdownItemActive: { backgroundColor: '#F3E8FF' },
+  tutorDropdownItemText: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  tutorDropdownItemTextActive: { color: '#6A1B9A', fontWeight: '700' },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: 2,
     marginBottom: 8,
   },
   sectionSmallLabel: {
@@ -706,15 +721,8 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     letterSpacing: 0.5,
   },
-  changeLinkBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  changeLinkText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#6A1B9A',
-  },
+  changeLinkBtn: { flexDirection: 'row', alignItems: 'center' },
+  changeLinkText: { fontSize: 13, fontWeight: '700', color: '#6A1B9A' },
   courseCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -733,11 +741,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
-  csBadgeText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#6A1B9A',
-  },
+  csBadgeText: { fontSize: 16, fontWeight: '800', color: '#6A1B9A' },
   courseDetails: { flex: 1 },
   courseTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
   courseSubtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
@@ -750,8 +754,6 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   activeBadgeText: { fontSize: 11, fontWeight: '700', color: '#16A34A' },
-
-  // Session Schedule
   scheduleHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -767,12 +769,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   monthBadgeText: { fontSize: 12, fontWeight: '700', color: '#6A1B9A' },
-
-  // Horizontal date strip
-  dateStripRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
+  dateStripRow: { flexDirection: 'row', justifyContent: 'space-between' },
   datePill: {
     flex: 1,
     alignItems: 'center',
@@ -783,16 +780,11 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     marginHorizontal: 3,
   },
-  datePillSelected: {
-    backgroundColor: '#6A1B9A',
-    borderColor: '#6A1B9A',
-  },
+  datePillSelected: { backgroundColor: '#6A1B9A', borderColor: '#6A1B9A' },
   dayAbbr: { fontSize: 11, fontWeight: '600', color: '#6B7280', marginBottom: 4 },
   dayAbbrSelected: { color: '#E9D5FF' },
   dayNum: { fontSize: 14, fontWeight: '700', color: '#111827' },
   dayNumSelected: { color: '#FFFFFF' },
-
-  // Configured Time Slots
   slotsHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -822,6 +814,16 @@ const styles = StyleSheet.create({
   slotInfo: { flex: 1 },
   slotTimeText: { fontSize: 14, fontWeight: '700', color: '#111827' },
   slotPeriodText: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  emptySlotNotice: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  emptySlotNoticeText: { fontSize: 13, color: '#6B7280' },
   addSlotDashedBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -835,8 +837,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   addSlotDashedText: { fontSize: 14, fontWeight: '600', color: '#4B5563' },
-
-  // Mode Cards
   modeCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -848,10 +848,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 10,
   },
-  modeCardSelected: {
-    borderColor: '#6A1B9A',
-    backgroundColor: '#FAF5FF',
-  },
+  modeCardSelected: { borderColor: '#6A1B9A', backgroundColor: '#FAF5FF' },
   modeCardLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   laptopIconBox: {
     width: 44,
@@ -884,10 +881,7 @@ const styles = StyleSheet.create({
   },
   radioCircleSelected: { borderColor: '#6A1B9A' },
   radioDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#6A1B9A' },
-  venueInputContainer: {
-    marginTop: -2,
-    marginBottom: 10,
-  },
+  venueInputContainer: { marginTop: -2, marginBottom: 10 },
   venueInput: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -898,8 +892,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#374151',
   },
-
-  // Capacity & Pricing
   capacityPricingCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -907,11 +899,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     padding: 14,
   },
-  capacityTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+  capacityTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   capacityLabel: { fontSize: 14, fontWeight: '700', color: '#111827' },
   capacityLimitBadge: {
     backgroundColor: '#F3E8FF',
@@ -920,12 +908,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   capacityLimitBadgeText: { fontSize: 11, fontWeight: '700', color: '#6A1B9A' },
-  stepperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 14,
-    gap: 12,
-  },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14, gap: 12 },
   stepBtn: {
     width: 36,
     height: 36,
@@ -944,24 +927,12 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     overflow: 'hidden',
   },
-  stepperProgressFill: {
-    height: '100%',
-    backgroundColor: '#D48B06',
-    borderRadius: 3,
-  },
-  stepperLegendRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 6,
-  },
+  stepperProgressFill: { height: '100%', backgroundColor: '#D48B06', borderRadius: 3 },
+  stepperLegendRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
   bookedText: { fontSize: 11, color: '#6B7280' },
   remainingGoldText: { fontSize: 11, fontWeight: '700', color: '#D48B06' },
   divider: { height: 1, backgroundColor: '#F3F4F6', marginVertical: 14 },
-  feeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+  feeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   feeLabel: { fontSize: 14, fontWeight: '700', color: '#111827' },
   feeSubtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
   feeInputWrapper: {
@@ -973,14 +944,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  feeInput: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111827',
-    textAlign: 'right',
-  },
-
-  // Toggle Card
+  feeInput: { fontSize: 15, fontWeight: '700', color: '#111827', textAlign: 'right' },
   toggleCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -1002,8 +966,6 @@ const styles = StyleSheet.create({
   warningExclamation: { fontSize: 16, fontWeight: '800', color: '#D97706' },
   toggleTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
   toggleSubtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-
-  // Bottom Action Buttons
   saveSessionBtn: {
     backgroundColor: '#D48B06',
     borderRadius: 12,
@@ -1024,8 +986,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   previewStudentBtnText: { color: '#4B5563', fontSize: 14, fontWeight: '600' },
-
-  // Modal Common Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -1038,17 +998,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
     elevation: 6,
   },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+  modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   modalHeaderIconBadge: {
     width: 32,
     height: 32,
@@ -1069,18 +1021,8 @@ const styles = StyleSheet.create({
     borderColor: '#F3F4F6',
   },
   slotOptionText: { fontSize: 14, fontWeight: '600', color: '#1F2937' },
-
-  // Course Edit Modal Inputs & Actions
-  inputGroup: {
-    marginBottom: 14,
-  },
-  inputLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#6B7280',
-    marginBottom: 6,
-    letterSpacing: 0.4,
-  },
+  inputGroup: { marginBottom: 14 },
+  inputLabel: { fontSize: 11, fontWeight: '700', color: '#6B7280', marginBottom: 6 },
   textInput: {
     backgroundColor: '#F9FAFB',
     borderWidth: 1,
@@ -1091,12 +1033,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#111827',
   },
-  modalBtnRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 10,
-    marginTop: 18,
-  },
+  modalBtnRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 18 },
   modalCancelBtn: {
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -1107,11 +1044,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalCancelBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
+  modalCancelBtnText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
   modalSaveBtn: {
     paddingHorizontal: 18,
     paddingVertical: 10,
@@ -1121,21 +1054,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalSaveBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-
-  // Bottom Nav
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-  },
-  navItem: { alignItems: 'center' },
-  navLabel: { fontSize: 11, fontWeight: '600', color: '#1F2937', marginTop: 3 },
+  modalSaveBtnText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
 });

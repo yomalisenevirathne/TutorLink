@@ -4,7 +4,11 @@ import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, StatusBar } fro
 import { Ionicons } from '@expo/vector-icons';
 
 export default function BookingSuccessScreen({ navigation, route }) {
-  const { date = 15, slot = '6:00 PM' } = route?.params || {};
+  const {
+    date = 15,
+    slot = '6:00 PM',
+    tutorName = route?.params?.tutor?.name || 'Sarith Samarakoon',
+  } = route?.params || {};
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -23,7 +27,7 @@ export default function BookingSuccessScreen({ navigation, route }) {
 
           {/* Subtitle */}
           <Text style={styles.description}>
-            Your session with <Text style={styles.boldText}>Sarith S.</Text> has been successfully booked for{' '}
+            Your session with <Text style={styles.boldText}>{tutorName}</Text> has been successfully booked for{' '}
             <Text style={styles.highlightText}>
               Date {date} at {slot}
             </Text>
