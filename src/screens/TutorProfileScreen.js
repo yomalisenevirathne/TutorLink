@@ -6,7 +6,6 @@ import { tutorService } from '../services/tutorService';
 export default function TutorProfileScreen({ user, onEditProfile, onCreateSession, onNavigateToBookings, onLogout, onDeleteProfile, navigation }) {
   const [notifications, setNotifications] = useState(user?.preferences?.notifications ?? true);
   const [privacy, setPrivacy] = useState(user?.preferences?.privacy ?? false);
-  const [activeTab, setActiveTab] = useState('Account');
 
   const tutorName = user?.fullName || 'Tutor Profile';
   const email = user?.email || 'N/A';
@@ -170,7 +169,7 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
               <Text style={styles.smallPillBtnText}>Feedback</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.smallPillBtn} onPress={() => Alert.alert('Payments', 'Payments history section')}>
+            <TouchableOpacity style={styles.smallPillBtn} onPress={onNavigateToPayments}>
               <Text style={styles.smallPillBtnText}>Payments</Text>
             </TouchableOpacity>
           </View>
@@ -220,6 +219,8 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
           <Text style={styles.deleteBtnText}>Delete Tutor Profile</Text>
         </TouchableOpacity>
       </ScrollView>
+
+
     </View>
   );
 }

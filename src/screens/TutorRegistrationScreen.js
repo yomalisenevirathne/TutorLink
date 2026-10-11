@@ -69,11 +69,11 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
           issuingInstitute: 'Verified Document',
           status: 'Verified',
           uploadedAt: new Date().toISOString().split('T')[0]
-        }] : []
+        }] : (user?.certificates || [])
       };
 
-      const res = user?.tutorId
-        ? await apiService.updateProfile(payload)
+      const res = user
+        ? await apiService.updateProfile({ ...payload, password: undefined, email: user.email })
         : await apiService.register(payload);
       setLoading(false);
 
@@ -114,7 +114,7 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
         <View style={styles.logoBadge}>
           <Text style={styles.logoBadgeIcon}>🎓</Text>
         </View>
-        <Text style={styles.headerTitle}>Become a Tutor</Text>
+        <Text style={styles.headerTitle}>{user ? 'Edit Profile' : 'Become a Tutor'}</Text>
         <Text style={styles.headerSubtitle}>Join our community of expert educators</Text>
       </View>
 
@@ -158,6 +158,7 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
               placeholder="john@example.com"
               placeholderTextColor="#94A3B8"
               value={email}
+            editable={!user}
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
@@ -243,7 +244,7 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
         onPress={handleRegister}
         disabled={loading}
       >
-        <Text style={styles.createAccountBtnText}>{loading ? 'Creating Account...' : 'Create Account'}</Text>
+        <Text style={styles.createAccountBtnText}>{loading ? 'Saving...' : user ? 'Save Profile' : 'Create Account'}</Text>
       </TouchableOpacity>
     </ScrollView>
   );

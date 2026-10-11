@@ -1,9 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, shadow } from '../../../constants/colors';
 import { tutorService } from '../../../services/tutorService';
+import { supabase } from '../../../utils/supabase';
+import useTutorRatingSummaries from '../../../hooks/useTutorRatingSummaries';
+import { withFeedbackRatings } from '../../../data/tutorFeedbackSearch';
 import { FilterPill } from '../components/FilterPill';
 import { NoResultsState } from '../components/NoResultsState';
 import { TutorResultCard } from '../components/TutorResultCard';
@@ -21,12 +24,7 @@ import { FilterSheet } from './FilterSheet';
 const SORT_SHORT = { recommended: undefined, priceAsc: 'Price ↑', ratingDesc: 'Rating ↓' };
 
 export function ResultsScreen({ navigation }) {
-    let insets = { top: 0, bottom: 0, left: 0, right: 0 };
-    try {
-        insets = useSafeAreaInsets();
-    } catch {
-        insets = { top: 0, bottom: 0, left: 0, right: 0 };
-    }
+    const insets = useSafeAreaInsets();
     const {
         query,
         submitSearch,
@@ -39,8 +37,13 @@ export function ResultsScreen({ navigation }) {
         toggleFavorite,
     } = useDiscovery();
     const [sheetSection, setSheetSection] = useState(null);
-    const [results, setResults] = useState([]);
+    const [tutors, setTutors] = useState([]);
     const [loading, setLoading] = useState(true);
+    const feedbackRatings = useTutorRatingSummaries(tutors.map(tutor => tutor.id));
+    const feedbackTutors = useMemo(() => feedbackRatings.loading || feedbackRatings.unavailable
+        ? [] : withFeedbackRatings(tutors, feedbackRatings.summaries),
+    [tutors, feedbackRatings.loading, feedbackRatings.unavailable, feedbackRatings.summaries]);
+    const results = useMemo(() => applyFilters(feedbackTutors, query, filters), [feedbackTutors, query, filters]);
 
     useEffect(() => {
         async function fetchFilteredTutors() {
@@ -65,19 +68,18 @@ export function ResultsScreen({ navigation }) {
                     availability: Array.isArray(t.availability) ? t.availability : [],
                 }));
 
-                const filtered = applyFilters(normalized, query, filters);
-                setResults(filtered);
+                setTutors(normalized);
             }
             catch (err) {
                 console.error('Error fetching search results:', err);
-                setResults([]);
+                setTutors([]);
             }
             finally {
                 setLoading(false);
             }
         }
         fetchFilteredTutors();
-    }, [query, filters]);
+    }, []);
 
     const activeCount = countActiveFilters(filters);
     const open = (section) => setSheetSection(section);
@@ -150,9 +152,14 @@ export function ResultsScreen({ navigation }) {
         </ScrollView>
       </View>
 
-      {loading ? (<View style={styles.loaderWrap}>
+      {loading || feedbackRatings.loading ? (<View style={styles.loaderWrap}>
           <ActivityIndicator size="large" color={colors.primary}/>
-        </View>) : (<FlatList data={results} keyExtractor={(t) => t.id} contentContainerStyle={[styles.list, compareIds.length > 0 && { paddingBottom: 110 }]} ListHeaderComponent={<Text style={styles.count}>
+        </View>) : feedbackRatings.unavailable ? (<View style={styles.empty}>
+          <Text style={styles.emptyTitle} accessibilityRole="alert">Tutor ratings could not be loaded</Text>
+          <Pressable style={styles.clearAll} onPress={feedbackRatings.refresh} accessibilityRole="button">
+            <Text style={styles.clearAllText}>Retry</Text>
+          </Pressable>
+        </View>) : (<FlatList data={results} extraData={feedbackRatings} keyExtractor={(t) => t.id} contentContainerStyle={[styles.list, compareIds.length > 0 && { paddingBottom: 110 }]} ListHeaderComponent={<Text style={styles.count}>
               {results.length} tutor{results.length === 1 ? '' : 's'} found
             </Text>} ListEmptyComponent={query ? (<NoResultsState query={query} onBroadenFilters={() => {
                     updateFilters({
@@ -174,6 +181,7 @@ export function ResultsScreen({ navigation }) {
               </View>)} renderItem={({ item }) => (
                 <TutorResultCard
                   tutor={item}
+                  feedbackRatings={feedbackRatings}
                   onQuickBook={() => navigation?.navigate('ScheduleScreen', {
                     tutorId: item.id,
                     tutorName: item.name,
@@ -215,7 +223,8 @@ export function ResultsScreen({ navigation }) {
           </Pressable>
         </View>)}
 
-      {sheetSection && (<FilterSheet initialSection={sheetSection} onClose={() => setSheetSection(null)}/>)}
+      {sheetSection && (<FilterSheet initialSection={sheetSection} onClose={() => setSheetSection(null)}
+        feedbackTutors={feedbackTutors} feedbackReady={!loading && !feedbackRatings.loading && !feedbackRatings.unavailable}/>)}
     </SafeAreaView>);
 }
 

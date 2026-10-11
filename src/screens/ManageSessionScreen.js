@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   TextInput,
   Switch,
@@ -202,7 +201,7 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
 
     const isMorning = slotTime.includes('AM');
     const newSlot = {
-      id: `slot-${Date.now()}`,
+      id: `slot-${slotTime}`,
       time: slotTime,
       period: isMorning ? 'Morning' : 'Afternoon / Evening',
       bookingsCount: 0,
@@ -301,7 +300,7 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#6A1B9A" />
 
       {/* Top Header */}
@@ -639,7 +638,9 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+
+
+    </View>
   );
 }
 

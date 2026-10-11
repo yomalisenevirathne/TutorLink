@@ -61,10 +61,7 @@ export function SearchScreen({ navigation }) {
 
     useEffect(() => {
         const q = debounced.trim();
-        if (!q) {
-            setSuggestions(null);
-            return;
-        }
+        if (!q) return;
         async function fetchSuggestions() {
             try {
                 const [{ data: subjectsData }, { data: tutorsData }] = await Promise.all([

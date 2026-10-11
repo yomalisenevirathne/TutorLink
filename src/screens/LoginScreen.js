@@ -125,7 +125,7 @@ export default function LoginScreen({ onLoginSuccess, onNavigateToRegister }) {
 
       {/* Bottom Sign up link */}
       <View style={styles.signUpRow}>
-        <Text style={styles.noAccountText}>Don't have an account? </Text>
+        <Text style={styles.noAccountText}>{"Don't have an account? "}</Text>
         <TouchableOpacity onPress={() => onNavigateToRegister && onNavigateToRegister()}>
           <Text style={styles.signUpText}>Sign up</Text>
         </TouchableOpacity>

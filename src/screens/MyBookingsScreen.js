@@ -1,23 +1,17 @@
 // src/screens/MyBookingsScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   Alert,
-  ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  fetchAllBookings,
-  cancelBookingInDb,
-  updateBookingStatusInDb,
-  deleteBookingFromDb,
-} from '../bookingService';
+import { cancelBookingInDb, completeBookingInDb, deleteBookingFromDb } from '../bookingService';
 
 export default function MyBookingsScreen({
   navigation,
@@ -27,34 +21,9 @@ export default function MyBookingsScreen({
   onDeleteBooking,
 }) {
   const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming' or 'past'
-  const [localBookings, setLocalBookings] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  // Sync propBookings with local state if provided
-  useEffect(() => {
-    if (propBookings && propBookings.length > 0) {
-      setLocalBookings(propBookings);
-    } else {
-      loadBookingsFromDb();
-    }
-  }, [propBookings]);
-
-  // Supabase Database fetch
-  const loadBookingsFromDb = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchAllBookings();
-      if (data && data.length > 0) {
-        setLocalBookings(data);
-      }
-    } catch (err) {
-      console.log('Error loading bookings from Supabase:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const bookings = localBookings;
+  const [completingId, setCompletingId] = useState(null);
+  const completing = useRef(false);
+  const bookings = propBookings ?? [];
 
   // Dynamic Categorization
   const upcomingBookings = bookings.filter((item) => item.status === 'Confirmed');
@@ -87,18 +56,15 @@ export default function MyBookingsScreen({
           text: 'Yes, Cancel',
           style: 'destructive',
           onPress: async () => {
-            try {
-              const bookingItem = localBookings.find((item) => item.id === id);
-              await deleteBookingFromDb(id);
-              if (onCancelBooking) {
-                onCancelBooking(id, bookingItem);
-              }
-              setLocalBookings((prev) => prev.filter((item) => item.id !== id));
-              Alert.alert('Session Cancelled', 'Your booking has been cancelled and removed.');
-            } catch (err) {
-              console.error('Error cancelling booking:', err);
-              Alert.alert('Error', 'Failed to cancel booking. Please try again.');
+            const result = await cancelBookingInDb(id);
+            if (!result.success) {
+              Alert.alert('Unable to cancel', result.error?.message || 'Please try again.');
+              return;
             }
+            if (onCancelBooking) {
+              onCancelBooking(id);
+            }
+            Alert.alert('Session Cancelled', 'Your booking has been cancelled.');
           },
         },
       ]
@@ -107,28 +73,39 @@ export default function MyBookingsScreen({
 
   // Mark as Completed Handler (Updates status in Supabase and moves to Past tab)
   const handleMarkCompleted = (id, tutor) => {
+    if (completing.current) return;
+    const message = `Mark session with ${tutor} as completed? It will move to the Past tab.`;
+    const complete = async () => {
+      if (completing.current) return;
+      completing.current = true;
+      setCompletingId(id);
+      try {
+        const result = await completeBookingInDb(id);
+        if (!result.success) {
+          const errorMessage = result.error?.message || 'Please try again.';
+          if (Platform.OS === 'web') window.alert(`Unable to complete: ${errorMessage}`);
+          else Alert.alert('Unable to complete', errorMessage);
+          return;
+        }
+        onCompleteBooking?.(id);
+        setActiveTab('past');
+      } finally {
+        completing.current = false;
+        setCompletingId(null);
+      }
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(message)) complete();
+      return;
+    }
     Alert.alert(
       'Complete Session',
-      `Mark session with ${tutor} as completed? It will move to the Past tab.`,
+      message,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Mark Completed',
-          onPress: async () => {
-            try {
-              await updateBookingStatusInDb(id, 'Completed');
-              if (onCompleteBooking) {
-                onCompleteBooking(id);
-              }
-              setLocalBookings((prev) =>
-                prev.map((item) => (item.id === id ? { ...item, status: 'Completed' } : item))
-              );
-              Alert.alert('Session Completed', 'The session has been marked as completed.');
-            } catch (err) {
-              console.error('Error completing booking:', err);
-              Alert.alert('Error', 'Failed to update session status.');
-            }
-          },
+          onPress: complete,
         },
       ]
     );
@@ -145,18 +122,15 @@ export default function MyBookingsScreen({
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            try {
-              const bookingItem = localBookings.find((item) => item.id === id);
-              await deleteBookingFromDb(id);
-              if (onDeleteBooking) {
-                onDeleteBooking(id, bookingItem);
-              }
-              setLocalBookings((prev) => prev.filter((item) => item.id !== id));
-              Alert.alert('Deleted', 'Past session record has been permanently removed.');
-            } catch (err) {
-              console.error('Error deleting booking record:', err);
-              Alert.alert('Error', 'Failed to delete record from database.');
+            const result = await deleteBookingFromDb(id);
+            if (!result.success) {
+              Alert.alert('Unable to delete', result.error?.message || 'Please try again.');
+              return;
             }
+            if (onDeleteBooking) {
+              onDeleteBooking(id);
+            }
+            Alert.alert('Deleted', 'Past session record has been permanently removed.');
           },
         },
       ]
@@ -165,6 +139,9 @@ export default function MyBookingsScreen({
 
   const handleReschedule = (item) => {
     navigation?.navigate('ScheduleScreen', {
+      rescheduleId: item.id,
+      mode: item.mode,
+      groupSize: item.group_size,
       year: item.year || new Date().getFullYear(),
       month: item.month !== undefined ? item.month : new Date().getMonth(),
       date: item.date || new Date().getDate(),
@@ -173,7 +150,7 @@ export default function MyBookingsScreen({
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#6A1B9A" />
 
       {/* Top Header */}
@@ -220,11 +197,7 @@ export default function MyBookingsScreen({
       </View>
 
       {/* Loading Indicator */}
-      {loading ? (
-        <View style={styles.centerLoading}>
-          <ActivityIndicator size="large" color="#6A1B9A" />
-        </View>
-      ) : activeTab === 'upcoming' ? (
+      {activeTab === 'upcoming' ? (
         /* SCREEN 5: Upcoming Bookings Content */
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {upcomingBookings.length === 0 ? (
@@ -295,11 +268,12 @@ export default function MyBookingsScreen({
                 {/* Simulation button to mark completed for testing */}
                 <TouchableOpacity
                   style={styles.completeActionBtn}
+                  disabled={completingId !== null}
                   onPress={() => handleMarkCompleted(item.id, item.tutor_name || 'Tutor')}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="checkmark-circle-outline" size={16} color="#059669" />
-                  <Text style={styles.completeActionText}>Mark as Completed</Text>
+                  <Text style={styles.completeActionText}>{completingId === item.id ? 'Completing...' : 'Mark as Completed'}</Text>
                 </TouchableOpacity>
               </View>
             ))
@@ -402,7 +376,7 @@ export default function MyBookingsScreen({
           </View>
         )
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -628,4 +602,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   scheduleNewBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+  },
+  navItem: { alignItems: 'center' },
+  navLabel: { fontSize: 11, fontWeight: '600', color: '#1F2937', marginTop: 3 },
 });

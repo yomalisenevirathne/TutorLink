@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   Alert,
   ActivityIndicator,
@@ -20,6 +19,7 @@ export default function BookingSummaryScreen({
   currentBooking,
   groupPlans,
   onConfirm,
+  onNavigateToPayment,
 }) {
   const [isSuccessModalVisible, setIsSuccessModalVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -86,13 +86,15 @@ export default function BookingSummaryScreen({
 
   // Real Database Save & Trigger Modal
   const handlePay = async () => {
+    if (isSubmitting || isSuccessModalVisible) return;
     setIsSubmitting(true);
     try {
       const bookingPayload = {
         tutor_name: tutorName,
         subject: subject,
         year: Number(year),
-        month: Number(month) + 1, // 1-indexed for Supabase
+        month: Number(month),
+        rescheduleId: currentBooking?.rescheduleId,
         date: Number(date),
         slot: slot,
         mode: mode,
@@ -106,30 +108,8 @@ export default function BookingSummaryScreen({
 
       // 1. Insert into Supabase bookings table
       const savedBooking = await createBookingInDb(bookingPayload);
-      const savedId = savedBooking?.id || `booking-${Date.now()}`;
 
-      // 2. Update local state in App.js for instant UI/capacity sync
-      if (onConfirm) {
-        onConfirm({
-          id: savedId,
-          tutorName: tutorName,
-          tutor_name: tutorName,
-          subject: subject,
-          year,
-          month,
-          date,
-          slot,
-          groupSize,
-          group_size: groupSize,
-          mode,
-          total_fee: total,
-          totalFee: total,
-          session_fee: sessionFee,
-          platform_fee: platformFee,
-          status: 'Confirmed',
-          tutor: currentBooking?.tutor,
-        });
-      }
+      if (onConfirm) onConfirm(savedBooking);
 
       // 3. Show confirmation modal
       setIsSuccessModalVisible(true);
@@ -142,7 +122,7 @@ export default function BookingSummaryScreen({
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#6A1B9A" />
 
       {/* Top Header */}
@@ -249,7 +229,12 @@ export default function BookingSummaryScreen({
         {/* Pay Button */}
         <TouchableOpacity
           style={[styles.payBtn, isSubmitting && { opacity: 0.7 }]}
-          onPress={handlePay}
+          onPress={onNavigateToPayment ? () => onNavigateToPayment({
+            year, month, date, slot,
+            tutorName: 'Sarith Samarakoon',
+            subject: 'Data Structures & Algorithms',
+            sessionFee, platformFee, total,
+          }) : handlePay}
           disabled={isSubmitting}
           activeOpacity={0.85}
         >
@@ -274,7 +259,7 @@ export default function BookingSummaryScreen({
           navigation?.navigate('ScheduleScreen');
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -373,4 +358,14 @@ const styles = StyleSheet.create({
     marginTop: 22,
   },
   payBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+  },
+  navItem: { alignItems: 'center' },
+  navLabel: { fontSize: 11, fontWeight: '600', color: '#1F2937', marginTop: 3 },
 });

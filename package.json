@@ -4,16 +4,19 @@
   "main": "index.js",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
-    "@react-native-async-storage/async-storage": "^3.1.1",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.109.0",
     "cors": "^2.8.6",
-    "expo": "~57.0.25",
+    "expo": "~57.0.27",
     "expo-constants": "~57.0.21",
     "expo-document-picker": "~57.0.3",
     "expo-font": "~57.0.4",
     "expo-image-picker": "~57.0.20",
+    "expo-linking": "~57.0.12",
+    "expo-print": "~57.0.2",
     "expo-router": "~57.0.25",
     "expo-secure-store": "~57.0.4",
+    "expo-sharing": "~57.0.22",
     "expo-status-bar": "~57.0.1",
     "express": "^5.2.1",
     "react": "19.2.3",
@@ -30,7 +33,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.js"
   },
   "private": true,
   "devDependencies": {

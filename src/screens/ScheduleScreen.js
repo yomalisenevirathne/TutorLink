@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   Alert,
   ActivityIndicator,
@@ -18,6 +17,8 @@ export default function ScheduleScreen({
   currentBooking,
   currentUser,
 }) {
+  const accountScreen = String(currentUser?.role || '').trim().toLowerCase() === 'tutor'
+    ? 'tutorProfile' : 'studentProfile';
   const now = new Date();
   const [currentYear, setCurrentYear] = useState(
     currentBooking?.year || now.getFullYear()
@@ -216,6 +217,11 @@ export default function ScheduleScreen({
       return;
     }
 
+    if (checkSlotStatus(selectedSlot).isBooked) {
+      Alert.alert('Slot Unavailable', 'Please select an available time slot.');
+      return;
+    }
+
     navigation?.navigate('SessionPreferencesScreen', {
       year: currentYear,
       month: currentMonth,
@@ -228,14 +234,14 @@ export default function ScheduleScreen({
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#6A1B9A" />
 
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.headerIconBtn}
-          onPress={() => navigation?.goBack ? navigation.goBack() : navigation?.navigate('SearchHomeScreen')}
+          onPress={() => navigation?.goBack ? navigation.goBack() : navigation?.navigate(accountScreen)}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
@@ -245,7 +251,7 @@ export default function ScheduleScreen({
           <TouchableOpacity style={{ marginRight: 14 }}>
             <Ionicons name="notifications" size={22} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation?.navigate('studentProfile')}>
+          <TouchableOpacity onPress={() => navigation?.navigate(accountScreen)}>
             <Ionicons name="person-circle" size={26} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -404,7 +410,7 @@ export default function ScheduleScreen({
           <Text style={styles.myBookingsBtnText}>Go to My Bookings</Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -565,4 +571,14 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   myBookingsBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+  },
+  navItem: { alignItems: 'center' },
+  navLabel: { fontSize: 11, fontWeight: '600', color: '#1F2937', marginTop: 3 },
 });

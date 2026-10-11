@@ -2,11 +2,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, shadow } from '../../../constants/colors';
 import { formatRate } from '../utils/filters';
 import { Avatar } from './Avatar';
-import { RatingStars } from './RatingStars';
+import TutorCardFeedbackRating from '../../../components/TutorCardFeedbackRating';
 import { VerifiedBadge } from './VerifiedBadge';
 
 /** Compact vertical card used in the "Recommended Tutors" carousel. */
-export function TutorCard({ tutor, onPress }) {
+export function TutorCard({ tutor, onPress, feedbackRatings }) {
     const subjects = Array.isArray(tutor?.subjects) ? tutor.subjects : [];
     const subjectsText = subjects
         .map((s) => (typeof s === 'string' ? s : (s?.subjectName || s?.name || '')))
@@ -27,7 +27,7 @@ export function TutorCard({ tutor, onPress }) {
         <Text style={styles.name} numberOfLines={1}>
           {tutor?.name || ''}
         </Text>
-        <RatingStars rating={tutor?.avgRating} reviewCount={tutor?.reviewCount} compact size={13}/>
+        <TutorCardFeedbackRating tutorId={tutor?.id} feedback={feedbackRatings} compact size={13}/>
         <Text style={styles.rate}>
           {formatRate(tutor?.hourlyRate)}
           <Text style={styles.per}> /hr</Text>

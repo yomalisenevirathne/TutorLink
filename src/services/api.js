@@ -1,7 +1,11 @@
 import { supabase } from '../utils/supabase';
+import { Platform } from 'react-native';
 
 // Frontend API client service for TutorLink Scope 3 Backend & Supabase Integration
-const API_BASE_URL = 'http://localhost:5000/api';
+const defaultApiBaseUrl = Platform.OS === 'android'
+  ? 'http://192.168.1.6:5000/api'
+  : 'http://localhost:5000/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || defaultApiBaseUrl;
 
 // Export Supabase client for direct usage across components
 export { supabase };
@@ -14,6 +18,7 @@ let mockState = {
 };
 
 async function fetchWithFallback(endpoint, options = {}) {
+  if (mockState.currentUser?.isDemo) return null;
   try {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), 2000);
@@ -37,6 +42,52 @@ async function fetchWithFallback(endpoint, options = {}) {
     console.log(`[API Client] Live REST endpoint ${endpoint} unavailable, using mock/Supabase fallback:`, err.message);
     return null;
   }
+}
+
+
+function appUserFromSupabase(user, details = {}) {
+  const metadata = user.user_metadata || {};
+  return {
+    id: user.id,
+    email: user.email,
+    role: metadata.role === 'Tutor' ? 'Tutor' : 'Student',
+    fullName: details.fullName || metadata.fullName || user.email?.split('@')[0] || '',
+    phoneNumber: details.phoneNumber || metadata.phoneNumber || '',
+    address: details.address || metadata.address || '',
+    subjects: details.subjects || metadata.subjects || [],
+    experienceLevel: details.experienceLevel || metadata.experienceLevel || '',
+    aboutYou: details.aboutYou || metadata.aboutYou || '',
+    avatarUrl: details.avatarUrl || metadata.avatarUrl || null,
+    isEmailVerified: Boolean(user.email_confirmed_at),
+    certificates: details.certificates || [],
+    paymentMethods: [],
+    preferences: { notifications: true, privacy: false },
+    privacyEnabled: false,
+  };
+}
+
+// Temporary prototype access; this does not create a Supabase identity or JWT.
+async function enterDemoAccount(email) {
+  try {
+    await supabase.auth.signOut({ scope: 'local' });
+  } catch {
+    // A demo ID can never match the authenticated UUID checked by payment reads.
+  }
+  const demoEmail = String(email || '').trim();
+  const user = {
+    ...appUserFromSupabase({
+      id: `demo_${Date.now()}`,
+      email: demoEmail,
+      user_metadata: {
+        role: demoEmail.toLowerCase().includes('tutor') ? 'Tutor' : 'Student',
+        fullName: demoEmail.split('@')[0].replace(/[._-]/g, ' ') || 'Demo User',
+      },
+    }),
+    isDemo: true,
+  };
+  mockState.token = null;
+  mockState.currentUser = user;
+  return { success: true, message: 'Demo login successful.', token: null, user };
 }
 
 export const apiService = {
@@ -118,26 +169,8 @@ export const apiService = {
     return { success: false, message: 'Invalid OTP code. Please use 123456 for demo.' };
   },
 
-  // 3. Register Account
+  // Return the Supabase identity/session used by protected database queries.
   register: async (registrationData) => {
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email: registrationData.email,
-        password: registrationData.password || 'password123',
-        options: {
-          data: {
-            fullName: registrationData.fullName,
-            role: registrationData.role
-          }
-        }
-      });
-      if (!error && data?.user) {
-        console.log('[Supabase Auth] Registered user in Supabase:', data.user.email);
-      }
-    } catch (err) {
-      console.log('[Supabase Auth] Registration fallback:', err.message);
-    }
-
     const liveResult = await fetchWithFallback('/auth/register', {
       method: 'POST',
       body: JSON.stringify(registrationData)
@@ -148,95 +181,144 @@ export const apiService = {
       return liveResult;
     }
 
-    const isEduEmail = registrationData.email.toLowerCase().includes('.ac.') || registrationData.email.toLowerCase().includes('.edu');
-    const newUser = {
-      id: 'usr_' + Date.now(),
-      isEmailVerified: isEduEmail,
-      privacyEnabled: false,
-      avatarUrl: registrationData.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80',
-      certificates: registrationData.certificates || [],
-      paymentMethods: [{ type: 'Visa', last4: '4321' }],
-      preferences: { notifications: true, privacy: false },
-      ...registrationData
-    };
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: registrationData.email.trim(),
+        password: registrationData.password,
+        options: {
+          data: {
+            fullName: registrationData.fullName,
+            role: registrationData.role,
+            phoneNumber: registrationData.phoneNumber,
+            subjects: registrationData.subjects,
+            experienceLevel: registrationData.experienceLevel,
+            aboutYou: registrationData.aboutYou,
+          }
+        }
+      });
+      if (error) {
+        return { success: false, message: error.message };
+      }
 
-    mockState.registeredUsers.push(newUser);
-    mockState.token = 'mock_token_' + Date.now();
-    mockState.currentUser = newUser;
+      if (!data?.user) {
+        return { success: false, message: 'Supabase did not return the new user.' };
+      }
 
-    return {
-      success: true,
-      message: 'Registration successful!',
-      token: mockState.token,
-      user: newUser
-    };
+      const userId = data.user.id;
+      const { error: profileError } = await supabase.from('profiles').upsert({
+        id: userId,
+        role: registrationData.role,
+        email: registrationData.email,
+        full_name: registrationData.fullName,
+        phone_number: registrationData.phoneNumber || '',
+        avatar_url: registrationData.avatarUrl || undefined,
+        about_you: registrationData.aboutYou || '',
+        is_email_verified: false
+      }, { onConflict: 'id', ignoreDuplicates: true });
+
+      if (profileError) {
+        return { success: false, message: `Profile could not be saved: ${profileError.message}` };
+      }
+
+      const profileTable = registrationData.role === 'Tutor' ? 'tutor_profiles' : 'student_profiles';
+      const roleProfile = registrationData.role === 'Tutor'
+        ? {
+            user_id: userId,
+            subjects: registrationData.subjects || [],
+            experience_level: registrationData.experienceLevel || 'Senior Tutor (4+ years)'
+          }
+        : {
+            user_id: userId,
+            subjects: registrationData.subjects || []
+          };
+      const { error: roleProfileError } = await supabase
+        .from(profileTable)
+        .upsert(roleProfile, { onConflict: 'user_id', ignoreDuplicates: true });
+
+      if (roleProfileError) {
+        return { success: false, message: `Role profile could not be saved: ${roleProfileError.message}` };
+      }
+
+      if (registrationData.role === 'Tutor' && registrationData.certificates?.length) {
+        const { error: certificateError } = await supabase.from('tutor_certificates').insert(
+          registrationData.certificates.map(certificate => ({
+            tutor_id: userId,
+            title: certificate.title,
+            issuing_institute: certificate.issuingInstitute,
+            certificate_url: certificate.certificateUrl,
+            status: certificate.status || 'Pending'
+          }))
+        );
+
+        if (certificateError) {
+          return { success: false, message: `Certificate could not be saved: ${certificateError.message}` };
+        }
+      }
+
+      const newUser = { ...appUserFromSupabase(data.user, registrationData),
+        role: registrationData.role, isEmailVerified: false };
+      mockState.token = data.session?.access_token || null;
+      mockState.currentUser = newUser;
+      return {
+        success: true,
+        message: 'Registration successful!',
+        token: mockState.token,
+        user: newUser
+      };
+    } catch (err) {
+      return { success: false, message: `Registration could not be saved: ${err.message}` };
+    }
   },
 
-  // 4. Login
   login: async (email, password) => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password
       });
-      if (!error && data?.user) {
-        console.log('[Supabase Auth] Logged in via Supabase:', data.user.email);
+      if (error || !data?.user || !data?.session) return enterDemoAccount(email);
+      let user = appUserFromSupabase(data.user);
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        if (!profileError && profile && profile.id === data.user.id) {
+          const profileTable = profile.role === 'Tutor' ? 'tutor_profiles' : 'student_profiles';
+          const { data: roleProfile } = await supabase
+            .from(profileTable)
+            .select('*')
+            .eq('user_id', data.user.id)
+            .single();
+
+          // Incoming branch's database profile takes precedence over auth metadata.
+          user = {
+            ...user,
+            id: data.user.id,
+            role: profile.role,
+            email: profile.email,
+            fullName: profile.full_name,
+            phoneNumber: profile.phone_number || '',
+            avatarUrl: profile.avatar_url,
+            aboutYou: profile.about_you || '',
+            isEmailVerified: profile.is_email_verified,
+            subjects: roleProfile?.subjects || [],
+            experienceLevel: roleProfile?.experience_level || ''
+          };
+        }
+      } catch (profileFailure) {
+        // Keep the verified identity if profile tables are temporarily unavailable.
+        console.warn('[Supabase Profile] Unable to load profile:', profileFailure.message);
       }
+      mockState.token = data.session.access_token;
+      mockState.currentUser = user;
+      return { success: true, message: 'Login successful.', token: mockState.token, user };
     } catch (err) {
       console.log('[Supabase Auth] Login fallback:', err.message);
+      return enterDemoAccount(email);
     }
-
-    const liveResult = await fetchWithFallback('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password })
-    });
-    if (liveResult) {
-      mockState.token = liveResult.token;
-      mockState.currentUser = liveResult.user;
-      return liveResult;
-    }
-
-    // Check if user was registered in local session
-    const existing = mockState.registeredUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-    if (existing) {
-      mockState.token = 'mock_token_' + Date.now();
-      mockState.currentUser = existing;
-      return {
-        success: true,
-        message: 'Login successful.',
-        token: mockState.token,
-        user: existing
-      };
-    }
-
-    // Dynamic fallback user for new clean login
-    const isTutor = email.toLowerCase().includes('tutor');
-    const user = {
-      id: 'usr_' + Date.now(),
-      role: isTutor ? 'Tutor' : 'Student',
-      email: email,
-      fullName: email.split('@')[0].replace('.', ' ').replace(/(^\w|\s\w)/g, m => m.toUpperCase()),
-      phoneNumber: '',
-      address: '',
-      subjects: isTutor ? ['Mathematics', 'Physics'] : ['Mathematics'],
-      experienceLevel: isTutor ? 'Tutor' : '',
-      aboutYou: '',
-      avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80',
-      isEmailVerified: true,
-      certificates: [],
-      paymentMethods: [{ type: 'Visa', last4: '4321' }],
-      preferences: { notifications: true, privacy: false }
-    };
-
-    mockState.token = 'mock_token_' + Date.now();
-    mockState.currentUser = user;
-
-    return {
-      success: true,
-      message: 'Login successful.',
-      token: mockState.token,
-      user
-    };
   },
 
   logout: async () => {
@@ -244,7 +326,7 @@ export const apiService = {
     mockState.currentUser = null;
     try {
       await supabase.auth.signOut();
-    } catch (err) {
+    } catch (_err) {
       // ignore
     }
     return { success: true };
@@ -257,6 +339,15 @@ export const apiService = {
   },
 
   updateProfile: async (updateData) => {
+    if (!mockState.currentUser) return { success: false, message: 'Please log in before editing your profile.' };
+    if (!mockState.currentUser.isDemo) {
+      const { password: _password, email: _email, ...metadata } = updateData;
+      const { data, error } = await supabase.auth.updateUser({ data: metadata });
+      if (error) return { success: false, message: error.message };
+      if (!data?.user) return { success: false, message: 'Unable to save your profile.' };
+      mockState.currentUser = appUserFromSupabase(data.user, { ...mockState.currentUser, ...metadata });
+      return { success: true, user: mockState.currentUser };
+    }
     const liveResult = await fetchWithFallback('/profile/update', {
       method: 'PUT',
       body: JSON.stringify(updateData)

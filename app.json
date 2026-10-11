@@ -2,6 +2,7 @@
   "expo": {
     "name": "TutorLink",
     "slug": "TutorLink",
+    "scheme": "tutorlink",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -23,7 +24,8 @@
     "plugins": [
       "expo-font",
       "expo-secure-store",
-      "expo-router"
+      "expo-router",
+      "expo-sharing"
     ]
   }
 }

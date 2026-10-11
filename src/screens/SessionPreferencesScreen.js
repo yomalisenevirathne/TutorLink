@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   StatusBar,
   Alert,
   ActivityIndicator,
@@ -24,6 +23,7 @@ export default function SessionPreferencesScreen({
     monthName = 'September',
     date = new Date().getDate(),
     slot = '6:00 PM',
+    rescheduleId = null,
   } = currentBooking || {};
 
   // Live Supabase capacity state
@@ -34,6 +34,7 @@ export default function SessionPreferencesScreen({
   });
   const [loadingCapacity, setLoadingCapacity] = useState(true);
   const [dbLoaded, setDbLoaded] = useState(false);
+  const [capacityError, setCapacityError] = useState(null);
 
   // Fetch live Supabase queries for chosen date and slot
   useEffect(() => {
@@ -41,13 +42,13 @@ export default function SessionPreferencesScreen({
     const loadLiveCapacity = async () => {
       setLoadingCapacity(true);
       try {
-        const liveCap = await fetchCapacityForSlot(year, month, date, slot);
+        const liveCap = await fetchCapacityForSlot(year, month, date, slot, rescheduleId);
         if (isMounted && liveCap) {
           setDbCapacity(liveCap);
           setDbLoaded(true);
         }
       } catch (err) {
-        console.error('Error fetching slot capacity:', err);
+        if (isMounted) setCapacityError(err.message || 'Unable to check availability. Please go back and try again.');
       } finally {
         if (isMounted) {
           setLoadingCapacity(false);
@@ -68,7 +69,7 @@ export default function SessionPreferencesScreen({
         unsubscribe();
       }
     };
-  }, [year, month, date, slot, navigation]);
+  }, [year, month, date, slot, rescheduleId]);
 
   // Fallback to in-memory local state if DB hasn't loaded yet
   const localCap = getCapacityForSlot
@@ -88,35 +89,20 @@ export default function SessionPreferencesScreen({
   const isLargeFull = largeSeatsLeft === 0;
 
   const [selectedMode, setSelectedMode] = useState(currentBooking?.mode || 'physical');
-  const [selectedGroupSize, setSelectedGroupSize] = useState(() => {
-    if (!isPrivateDisabled) return 'private';
-    if (!isSmallFull) return 'small';
-    if (!isLargeFull) return 'large';
-    return null;
-  });
-
-  // Adjust selection if currently selected group size is locked
-  useEffect(() => {
-    if (selectedGroupSize === 'private' && isPrivateDisabled) {
-      if (!isSmallFull) setSelectedGroupSize('small');
-      else if (!isLargeFull) setSelectedGroupSize('large');
-      else setSelectedGroupSize(null);
-    } else if (selectedGroupSize === 'small' && isSmallFull) {
-      if (!isPrivateDisabled) setSelectedGroupSize('private');
-      else if (!isLargeFull) setSelectedGroupSize('large');
-      else setSelectedGroupSize(null);
-    } else if (selectedGroupSize === 'large' && isLargeFull) {
-      if (!isPrivateDisabled) setSelectedGroupSize('private');
-      else if (!isSmallFull) setSelectedGroupSize('small');
-      else setSelectedGroupSize(null);
-    } else if (!selectedGroupSize) {
-      if (!isPrivateDisabled) setSelectedGroupSize('private');
-      else if (!isSmallFull) setSelectedGroupSize('small');
-      else if (!isLargeFull) setSelectedGroupSize('large');
-    }
-  }, [isPrivateDisabled, isSmallFull, isLargeFull, selectedGroupSize]);
+  const [requestedGroupSize, setSelectedGroupSize] = useState(currentBooking?.groupSize || 'small');
+  const availableGroups = [
+    ...(!isSmallFull ? ['small'] : []),
+    ...(!isPrivateDisabled ? ['private'] : []),
+    ...(!isLargeFull ? ['large'] : []),
+  ];
+  const selectedGroupSize = availableGroups.includes(requestedGroupSize) ? requestedGroupSize : availableGroups[0] ?? null;
 
   const handleContinue = () => {
+    if (loadingCapacity) return;
+    if (capacityError) {
+      Alert.alert('Availability Unavailable', capacityError);
+      return;
+    }
     if (!selectedGroupSize) {
       Alert.alert('Selection Required', 'Please select an available group size.');
       return;
@@ -153,7 +139,7 @@ export default function SessionPreferencesScreen({
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#6A1B9A" />
 
       {/* Header */}
@@ -444,7 +430,7 @@ export default function SessionPreferencesScreen({
           <Text style={styles.continueBtnText}>Continue</Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -558,4 +544,14 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
   continueBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+  },
+  navItem: { alignItems: 'center' },
+  navLabel: { fontSize: 11, fontWeight: '600', color: '#1F2937', marginTop: 3 },
 });

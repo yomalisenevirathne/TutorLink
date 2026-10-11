@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, shadow } from '../../../constants/colors';
 import { supabase } from '../../../utils/supabase';
 import { tutorService } from '../../../services/tutorService';
+import useTutorRatingSummaries from '../../../hooks/useTutorRatingSummaries';
 import { Chip } from '../components/Chip';
 import { TutorCard } from '../components/TutorCard';
 import { useDiscovery } from '../context/DiscoveryContext';
@@ -36,6 +37,7 @@ export function HomeScreen({ navigation }) {
     const [recommendedTutors, setRecommendedTutors] = useState([]);
     const [popularSubjects, setPopularSubjects] = useState(DEFAULT_POPULAR_SUBJECTS);
     const [loading, setLoading] = useState(true);
+    const feedbackRatings = useTutorRatingSummaries(recommendedTutors.map(tutor => tutor.id));
 
     useEffect(() => {
         async function fetchSubjects() {
@@ -180,6 +182,7 @@ export function HomeScreen({ navigation }) {
           <FlatList
             horizontal
             data={recommendedTutors}
+            extraData={feedbackRatings}
             keyExtractor={(t) => t.id}
             showsHorizontalScrollIndicator={false}
             style={styles.bleed}
@@ -187,6 +190,7 @@ export function HomeScreen({ navigation }) {
             renderItem={({ item }) => (
               <TutorCard
                 tutor={item}
+                feedbackRatings={feedbackRatings}
                 onPress={() => navigation?.navigate('SearchTutorProfileScreen', {
                   tutorId: item.id,
                   tutorName: item.name,
