@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
@@ -111,32 +110,14 @@ export function FeedbackComposer({ user, onSend, busy, replyTo, onCancelReply, e
 }
 
 export function FeedbackComment({ comment, viewerId, onReact, onReply, onEdit, onDelete, busy, isReply = false }) {
-  const [menuAnchor, setMenuAnchor] = useState(null);
   const [actionsVisible, setActionsVisible] = useState(false);
-  const moreButton = useRef(null);
-  const pendingMenuAction = useRef(null);
-  const { width, height } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
-  const menuWidth = Math.min(208, width - insets.left - insets.right - 24);
   const closeMenu = () => setActionsVisible(false);
-  const finishMenuAction = () => {
-    const action = pendingMenuAction.current;
-    pendingMenuAction.current = null;
-    action?.(comment);
-  };
   const selectMenuAction = (action) => {
     closeMenu();
-    // iOS must dismiss this modal before presenting the delete dialog.
-    if (Platform.OS === 'ios') pendingMenuAction.current = action;
-    else action(comment);
-  };
-  const openMenu = () => {
-    moreButton.current?.measureInWindow((x, y, buttonWidth, buttonHeight) => {
-      setMenuAnchor({ x, y, width: buttonWidth, height: buttonHeight });
-      setActionsVisible(true);
-    });
+    action(comment);
   };
   const isOwner = !!viewerId && comment.authorId === viewerId;
+  const showOwnerActions = isOwner && onEdit && onDelete && actionsVisible;
   const date = new Date(comment.createdAt);
   const dateLabel = Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   const reactions = Object.values(comment.reactions || {});
@@ -149,40 +130,27 @@ export function FeedbackComment({ comment, viewerId, onReact, onReply, onEdit, o
         {!!dateLabel && <Text style={styles.commentDate}>{dateLabel}</Text>}
       </View>
       {isOwner && <Text style={styles.youBadge}>You</Text>}
-      {isOwner && onEdit && onDelete && <Pressable ref={moreButton}
+      {isOwner && onEdit && onDelete && <Pressable
         style={({ pressed }) => [styles.moreButton, (pressed || actionsVisible) && styles.moreButtonActive]}
-        onPress={openMenu} disabled={busy}
+        onPress={() => setActionsVisible((visible) => !visible)} disabled={busy}
         aria-expanded={actionsVisible} aria-disabled={busy}
         accessibilityRole="button" accessibilityLabel="Manage your comment" accessibilityState={{ expanded: actionsVisible, disabled: busy }}>
         <Feather name="more-horizontal" size={20} color={actionsVisible ? '#7C3AED' : '#8C819B'} />
       </Pressable>}
     </View>
-    {isOwner && menuAnchor && <Modal visible={actionsVisible} transparent animationType="none" statusBarTranslucent navigationBarTranslucent
-      onRequestClose={closeMenu} onDismiss={finishMenuAction} supportedOrientations={['portrait', 'landscape']}>
-      <View style={styles.menuOverlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={closeMenu}
-          accessibilityRole="button" accessibilityLabel="Close comment menu" />
-        <View style={[styles.ownerActions, { width: menuWidth,
-          left: Math.max(insets.left + 12, Math.min(menuAnchor.x + menuAnchor.width - menuWidth, width - insets.right - menuWidth - 12)),
-          top: Math.max(insets.top + 8, Math.min(height - insets.bottom - 64,
-            menuAnchor.y + menuAnchor.height + 64 > height - insets.bottom
-              ? menuAnchor.y - 64 : menuAnchor.y + menuAnchor.height + 6)),
-        }]} accessibilityViewIsModal onAccessibilityEscape={closeMenu}>
-          <Pressable style={({ pressed }) => [styles.ownerAction, styles.editAction, pressed && styles.editActionPressed]}
-            onPress={() => selectMenuAction(onEdit)} disabled={busy}
-            accessibilityRole="button" accessibilityLabel="Edit your comment" accessibilityState={{ disabled: busy }}>
-            <Feather name="edit-3" size={16} color="#7C3AED" /><Text style={styles.editLabel}>Edit</Text>
-          </Pressable>
-          <Pressable style={({ pressed }) => [styles.ownerAction, styles.deleteAction, pressed && styles.deleteActionPressed]}
-            onPress={() => selectMenuAction(onDelete)} disabled={busy}
-            accessibilityRole="button" accessibilityLabel="Delete your comment" accessibilityState={{ disabled: busy }}>
-            <Feather name="trash-2" size={16} color="#D14359" /><Text style={styles.deleteLabel}>Delete</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>}
     <Text style={styles.commentBody}>{comment.text}</Text>
-    <View style={styles.commentActions}>
+    {showOwnerActions ? <View style={styles.ownerActions} onAccessibilityEscape={closeMenu}>
+      <Pressable style={({ pressed }) => [styles.ownerAction, styles.editAction, pressed && styles.editActionPressed]}
+        onPress={() => selectMenuAction(onEdit)} disabled={busy}
+        accessibilityRole="button" accessibilityLabel="Edit your comment" accessibilityState={{ disabled: busy }}>
+        <Feather name="edit-3" size={16} color="#7C3AED" /><Text style={styles.editLabel}>Edit</Text>
+      </Pressable>
+      <Pressable style={({ pressed }) => [styles.ownerAction, styles.deleteAction, pressed && styles.deleteActionPressed]}
+        onPress={() => selectMenuAction(onDelete)} disabled={busy}
+        accessibilityRole="button" accessibilityLabel="Delete your comment" accessibilityState={{ disabled: busy }}>
+        <Feather name="trash-2" size={16} color="#D14359" /><Text style={styles.deleteLabel}>Delete</Text>
+      </Pressable>
+    </View> : <View style={styles.commentActions}>
       {['like', 'dislike'].map((kind) => <Pressable key={kind}
         style={({ pressed }) => [styles.reaction, ownReaction === kind && styles.activeReaction, pressed && styles.reactionPressed]}
         onPress={() => onReact(comment.id, kind)} disabled={busy} accessibilityRole="button"
@@ -200,7 +168,7 @@ export function FeedbackComment({ comment, viewerId, onReact, onReply, onEdit, o
         <Feather name="message-square" size={16} color="#746580" />
         <Text style={styles.reactionCount}>Reply</Text>
       </Pressable>}
-    </View>
+    </View>}
   </View>;
 }
 
@@ -266,8 +234,7 @@ const styles = StyleSheet.create({
   youBadge: { fontSize: 10, fontWeight: '600', color: '#7C3AED', backgroundColor: '#F0E8FD', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 7, overflow: 'hidden' },
   moreButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
   moreButtonActive: { backgroundColor: '#F0E8FD' },
-  menuOverlay: { flex: 1 },
-  ownerActions: { position: 'absolute', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E1D4F1', borderRadius: 16, padding: 6, boxShadow: '0px 6px 24px rgba(50, 28, 82, 0.14)' },
+  ownerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%', maxWidth: 240 },
   ownerAction: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, borderWidth: 1, borderRadius: 11 },
   editAction: { backgroundColor: '#F3ECFF', borderColor: '#D6BDF5' },
   deleteAction: { backgroundColor: '#FFF2F4', borderColor: '#F3BCC6' },
