@@ -93,7 +93,7 @@ export default function AddCardScreen({ userId, isDemo, onBack, onSaved, backLab
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#FFFFFF' },
-  header: { backgroundColor: '#7100FF', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 18, gap: 16 },
+  header: { backgroundColor: '#6A1B9A', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 18, gap: 16 },
   title: { color: '#FFFFFF', fontSize: 20, fontWeight: '700' },
   body: { flex: 1 },
   content: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 25 },
@@ -115,12 +115,12 @@ const styles = StyleSheet.create({
   nameLabel: { marginTop: 15 },
   consent: { flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 16, paddingVertical: 5 },
   checkbox: { width: 17, height: 17, borderWidth: 1, borderColor: '#BDBDBD', borderRadius: 3, alignItems: 'center', justifyContent: 'center' },
-  checked: { backgroundColor: '#7100FF', borderColor: '#7100FF' },
+  checked: { backgroundColor: '#6A1B9A', borderColor: '#6A1B9A' },
   consentText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#969696' },
   note: { color: '#89818D', fontSize: 11, lineHeight: 17, marginTop: 14 },
   error: { color: '#A33333', backgroundColor: '#FFF1F1', borderRadius: 5, padding: 12, fontSize: 13, lineHeight: 20, marginTop: 16 },
   footer: { paddingHorizontal: 24, paddingBottom: 22, paddingTop: 12 },
-  saveButton: { backgroundColor: '#530099', borderRadius: 3, paddingVertical: 12, alignItems: 'center' },
+  saveButton: { backgroundColor: '#6A1B9A', borderRadius: 3, paddingVertical: 12, alignItems: 'center' },
   disabled: { opacity: 0.6 },
   saveText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
 });

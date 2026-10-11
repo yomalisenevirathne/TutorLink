@@ -18,7 +18,7 @@ const statusColors = {
   Paid: { text: '#00A83C', background: '#EFFBF3' },
   Pending: { text: '#E56A00', background: '#FFF6ED' },
   Refunded: { text: '#FF2929', background: '#FFF1F1' },
-  Demo: { text: '#7100FF', background: '#F6F0FF' },
+  Demo: { text: '#6A1B9A', background: '#F6F0FF' },
 };
 
 function PaymentCard({ payment }) {
@@ -27,11 +27,10 @@ function PaymentCard({ payment }) {
   const compact = width < 360;
   const colors = paymentColors[payment.status];
   const nameParts = payment.name.trim().split(/\s+/);
-  const displayName = nameParts.length > 1 ? `${nameParts[0]} ${nameParts[nameParts.length - 1][0]}` : nameParts[0];
   const initials = nameParts.slice(0, 2).map((part) => part[0]).join('');
   return (
     <View style={[styles.card, { borderColor: colors.border }, compact && styles.compactCard]}
-      accessibilityLabel={`${payment.name}, ${formatPaymentAmount(payment)}, ${payment.status}, ${formatPaymentDate(payment.occurredAt)}${payment.reference ? `, ${payment.reference}` : ''}`}>
+      accessibilityLabel={`${payment.name}, ${payment.subject || ''}, ${payment.bookerName ? `Booked by ${payment.bookerName}, ` : ''}${formatPaymentAmount(payment)}, ${formatPaymentDate(payment.occurredAt)}`}>
       <View style={[styles.avatar, { backgroundColor: colors.background, borderColor: colors.border }, compact && styles.compactAvatar]}>
         {payment.avatarUrl && payment.avatarUrl !== failedImageUrl ? (
           <Image source={{ uri: payment.avatarUrl }} style={styles.avatarImage} resizeMode="cover"
@@ -41,14 +40,10 @@ function PaymentCard({ payment }) {
         )}
       </View>
       <View style={styles.cardDetails}>
-        <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
+        <Text style={styles.name} numberOfLines={2}>{payment.name}</Text>
+        {!!payment.subject && <Text style={styles.subject} numberOfLines={2}>{payment.subject}</Text>}
+        {!!payment.bookerName && <Text style={styles.booker} numberOfLines={2}>Booked by: {payment.bookerName}</Text>}
         <Text style={[styles.date, compact && styles.compactDate]}>{formatPaymentDate(payment.occurredAt)}</Text>
-        {payment.status === 'Demo' && (
-          <View style={styles.demoBadge}>
-            <View style={styles.demoDot} />
-            <Text style={styles.demoLabel}>Demo · No money charged</Text>
-          </View>
-        )}
       </View>
       <Text style={[styles.amount, { color: colors.text }, compact && styles.compactAmount]}
         numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{formatPaymentAmount(payment)}</Text>
@@ -188,7 +183,7 @@ export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo =
 
       {loading ? (
         <View style={styles.loadingState} accessibilityRole="progressbar" accessibilityLabel="Loading payment history">
-          <ActivityIndicator size="large" color="#7100FF" />
+          <ActivityIndicator size="large" color="#6A1B9A" />
           <Text style={styles.emptyText}>Loading payment history…</Text>
         </View>
       ) : (
@@ -208,7 +203,7 @@ export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo =
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <View style={styles.emptyIconCircle}>
-              <Feather name={loadError ? 'alert-circle' : isHistoryEmpty ? 'file-text' : 'search'} size={34} color="#875CC4" />
+              <Feather name={loadError ? 'alert-circle' : isHistoryEmpty ? 'file-text' : 'search'} size={34} color="#6A1B9A" />
             </View>
             <Text style={styles.emptyTitle}>{loadError ? 'Unable to load payments' : hasFilters ? `No ${status.toLowerCase()} payments` : search ? 'No matching payments' : 'No payments yet'}</Text>
             <Text style={styles.emptyText}>{loadError || (isHistoryEmpty ? 'Your transaction history will show up here\nonce you book your first session' : "You don't have any transactions\nmatching this filter right now")}</Text>
@@ -280,15 +275,15 @@ export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo =
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#FAF8FD' },
   loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  header: { minHeight: 76, backgroundColor: '#7100FF', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 8, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, boxShadow: '0px 6px 16px rgba(89, 27, 166, 0.14)' },
+  header: { minHeight: 76, backgroundColor: '#6A1B9A', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 8, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, boxShadow: '0px 6px 16px rgba(106, 27, 154, 0.14)' },
   backButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   title: { flex: 1, color: '#FFFFFF', fontSize: 20, fontWeight: '700', letterSpacing: -0.5 },
   headerActionButton: { width: 44, height: 44, borderRadius: 15, backgroundColor: 'rgba(255, 255, 255, 0.13)', alignItems: 'center', justifyContent: 'center' },
   searchRow: { width: '100%', maxWidth: 720, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, marginTop: 24, marginBottom: 6 },
   searchBox: { flex: 1, minHeight: 48, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, borderWidth: 1, borderColor: '#E8DFF2', backgroundColor: '#FFFFFF', borderRadius: 15, gap: 10, boxShadow: '0px 2px 6px rgba(49, 25, 76, 0.025)' },
   searchInput: { flex: 1, minWidth: 0, paddingVertical: 12, fontSize: 14, color: '#2D203D' },
-  filterButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: '#7100FF', borderRadius: 15, boxShadow: '0px 4px 10px rgba(113, 0, 255, 0.18)' },
-  filterDot: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFD44D', borderWidth: 1.5, borderColor: '#7100FF' },
+  filterButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: '#6A1B9A', borderRadius: 15, boxShadow: '0px 4px 10px rgba(106, 27, 154, 0.18)' },
+  filterDot: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFD44D', borderWidth: 1.5, borderColor: '#6A1B9A' },
   filterChip: { alignSelf: 'flex-start', marginLeft: 20, marginTop: 12, marginBottom: 2, minHeight: 36, paddingHorizontal: 12, borderRadius: 18, flexDirection: 'row', alignItems: 'center', gap: 8 },
   filterChipText: { fontSize: 13, fontWeight: '500' },
   list: { flex: 1 },
@@ -303,12 +298,11 @@ const styles = StyleSheet.create({
   avatarImage: { width: '100%', height: '100%' },
   initials: { fontSize: 15, fontWeight: '700', letterSpacing: 0.4 },
   cardDetails: { flex: 1, minWidth: 0 },
+  subject: { fontSize: 12, lineHeight: 17, color: '#6A1B9A', marginTop: 4 },
+  booker: { fontSize: 11, lineHeight: 16, color: '#85788F', marginTop: 4 },
   name: { fontSize: 16, fontWeight: '700', color: '#292034', marginBottom: 5, letterSpacing: -0.3 },
   date: { fontSize: 11, lineHeight: 16, color: '#85788F' },
   compactDate: { fontSize: 10 },
-  demoBadge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 7, maxWidth: '100%' },
-  demoDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#9369CA', flexShrink: 0 },
-  demoLabel: { flexShrink: 1, fontSize: 10, lineHeight: 14, color: '#8657BD', fontWeight: '500' },
   amount: { fontSize: 14, flexShrink: 0, fontWeight: '700', textAlign: 'right', maxWidth: '36%', fontVariant: ['tabular-nums'], letterSpacing: -0.3 },
   compactAmount: { fontSize: 12 },
   sectionFooter: { height: 6 },
@@ -317,9 +311,9 @@ const styles = StyleSheet.create({
   emptyIconCircle: { width: 88, height: 88, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EEE6F8', marginBottom: 8 },
   emptyTitle: { fontSize: 21, fontWeight: '700', color: '#292034', textAlign: 'center' },
   emptyText: { fontSize: 13, lineHeight: 21, color: '#85788F', textAlign: 'center' },
-  findTutorButton: { marginHorizontal: 20, marginBottom: 24, minHeight: 50, borderRadius: 16, backgroundColor: '#7100FF', alignItems: 'center', justifyContent: 'center' },
+  findTutorButton: { marginHorizontal: 20, marginBottom: 24, minHeight: 50, borderRadius: 16, backgroundColor: '#6A1B9A', alignItems: 'center', justifyContent: 'center' },
   resetButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 },
-  resetText: { color: '#7100FF', fontSize: 14, fontWeight: '600' },
+  resetText: { color: '#6A1B9A', fontSize: 14, fontWeight: '600' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(30, 15, 49, 0.4)', justifyContent: 'flex-end', alignItems: 'center' },
   filterPanel: { width: '100%', maxWidth: 560, backgroundColor: '#FFFFFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 28 },
   sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E2D9EC', alignSelf: 'center', marginBottom: 16 },
@@ -329,11 +323,11 @@ const styles = StyleSheet.create({
   statusOption: { minHeight: 52, paddingHorizontal: 16, marginBottom: 8, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#EEE8F3' },
   selectedOption: { backgroundColor: '#F6F0FF', borderColor: '#D5B9FA' },
   optionText: { fontSize: 14, color: '#645570', fontWeight: '600' },
-  selectedOptionText: { color: '#7100FF' },
+  selectedOptionText: { color: '#6A1B9A' },
   radioCircle: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: '#D5CBDD', alignItems: 'center', justifyContent: 'center' },
-  selectedRadio: { borderColor: '#7100FF' },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#7100FF' },
+  selectedRadio: { borderColor: '#6A1B9A' },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#6A1B9A' },
   filterActions: { marginTop: 16 },
-  applyButton: { width: '100%', minHeight: 50, backgroundColor: '#7100FF', borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  applyButton: { width: '100%', minHeight: 50, backgroundColor: '#6A1B9A', borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   applyText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
 });

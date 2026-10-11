@@ -13,7 +13,8 @@ const row = { id: 'saved-demo-1', user_id: ownerId, reference: receipt.reference
   subject: receipt.subject, session_date: receipt.sessionDate, session_time: receipt.time,
   card_brand: receipt.brand, card_last4: receipt.last4, occurred_at: '2026-10-08T10:00:00Z' };
 
-function service({ insertError = null, readError = null, saved = row, rows = [row], authOwner = ownerId } = {}) {
+function service({ insertError = null, readError = null, saved = row, rows = [row], authOwner = ownerId,
+  rpcData = null, rpcError = null } = {}) {
   const requests = [], identities = [];
   const client = { from(table) {
     const request = { table, filters: [] };
@@ -30,6 +31,10 @@ function service({ insertError = null, readError = null, saved = row, rows = [ro
     };
     return query;
   } };
+  client.rpc = async (name, input) => {
+    requests.push({ rpc: name, input });
+    return { data: rpcData, error: rpcError };
+  };
   const { code } = transformSync(fs.readFileSync(path.join(__dirname, '../src/services/demoPayments.js'), 'utf8'), {
     babelrc: false, configFile: false, plugins: ['@babel/plugin-transform-modules-commonjs'],
   });
@@ -103,4 +108,48 @@ test('missing demo storage is compatible with existing real history; denied read
   const subject = service();
   await assert.rejects(subject.getDemoPaymentHistory(ownerId, { signal: controller.signal }), { name: 'AbortError' });
   assert.equal(subject.requests.length, 0);
+});
+
+const linkedReceipt = { ...receipt, cardId: 'card-1', bookerName: 'Booking Student', tutorId: 'tutor-42',
+  booking: { year: 2026, month: 9, date: 8, slot: receipt.time, tutorName: receipt.tutorName,
+    subject: receipt.subject, tutorId: 'tutor-42', bookerName: 'Booking Student',
+    mode: 'online', groupSize: 'small', sessionFee: 400, platformFee: 50, total: 450, rescheduleId: null } };
+const linkedPayment = { ...row, booking_id: 'booking-1', booker_name: 'Booking Student', tutor_id: 'tutor-42' };
+const linkedBooking = { id: 'booking-1', student_id: ownerId, tutor_name: receipt.tutorName,
+  subject: receipt.subject, total_fee: 450, slot: receipt.time, session_date: receipt.sessionDate,
+  month: 10, status: 'Confirmed' };
+
+test('new checkout records a linked booking and payment through one database transaction', async () => {
+  const subject = service({ rpcData: { payment: linkedPayment, booking: linkedBooking } });
+  const saved = await subject.saveDemoPayment(linkedReceipt);
+  assert.equal(subject.requests.length, 1);
+  assert.equal(subject.requests[0].rpc, 'record_booking_payment');
+  assert.deepEqual(subject.requests[0].input, {
+    p_reference: receipt.reference, p_card_id: 'card-1', p_booking: linkedReceipt.booking,
+  });
+  assert.equal(saved.booking.id, saved.booking_id);
+  assert.equal(saved.booking.month, 9);
+  assert.equal(saved.booker_name, 'Booking Student');
+  assert.equal(saved.tutor_id, 'tutor-42');
+});
+
+test('unconfirmed, mismatched and failed linked records never open booking success', async () => {
+  for (const change of [{ student_id: 'another-user' }, { id: 'wrong-booking' },
+    { tutor_name: 'Wrong Tutor' }, { subject: 'Wrong subject' }, { total_fee: 999 }, { status: 'Cancelled' }]) {
+    await assert.rejects(service({ rpcData: { payment: linkedPayment, booking: { ...linkedBooking, ...change } } })
+      .saveDemoPayment(linkedReceipt), /confirmed together/);
+  }
+  await assert.rejects(service({ rpcError: { code: 'PGRST202' } }).saveDemoPayment(linkedReceipt), /supabase_booking_payments.sql/);
+  await assert.rejects(service({ rpcError: { code: '42501' } }).saveDemoPayment(linkedReceipt), /could not be saved/);
+});
+
+test('history preserves tutor, booker, subject and booking snapshots from the saved record', async () => {
+  const subject = service({ rows: [{ ...linkedPayment, counterparty_avatar_url: 'https://example.com/tutor.jpg' }] });
+  const [payment] = await subject.getDemoPaymentHistory(ownerId);
+  assert.equal(payment.name, receipt.tutorName);
+  assert.equal(payment.subject, receipt.subject);
+  assert.equal(payment.bookerName, 'Booking Student');
+  assert.equal(payment.tutorId, 'tutor-42');
+  assert.equal(payment.bookingId, 'booking-1');
+  assert.equal(payment.avatarUrl, 'https://example.com/tutor.jpg');
 });

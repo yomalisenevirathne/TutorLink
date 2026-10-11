@@ -39,7 +39,7 @@ export default function PaymentSettingsDrawer({ userId, isDemo, cardsVersion, on
           <View style={styles.handle} />
           <View style={styles.header}>
             <View style={styles.headerIcon}>
-              <Feather name="settings" size={23} color="#7100FF" />
+              <Feather name="settings" size={23} color="#6A1B9A" />
             </View>
             <View style={styles.heading}>
               <Text style={styles.title} accessibilityRole="header">Payment Settings</Text>
@@ -64,9 +64,9 @@ export default function PaymentSettingsDrawer({ userId, isDemo, cardsVersion, on
           </ScrollView>
           <View style={styles.actions}>
             <TouchableOpacity style={styles.manageButton} onPress={onManagePayments} accessibilityRole="button" accessibilityLabel="Manage Payments">
-              <View style={styles.manageIcon}><Feather name="credit-card" size={19} color="#7100FF" /></View>
+              <View style={styles.manageIcon}><Feather name="credit-card" size={19} color="#6A1B9A" /></View>
               <Text style={styles.manageText}>Manage Payments</Text>
-              <Feather name="chevron-right" size={19} color="#7100FF" />
+              <Feather name="chevron-right" size={19} color="#6A1B9A" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.addButton} onPress={onAddCard} accessibilityRole="button" accessibilityLabel="Add New Card">
               <View style={styles.addIcon}><Feather name="plus" size={18} color="#FFFFFF" /></View>
@@ -95,13 +95,13 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 5 },
   sectionTitle: { color: '#35263F', fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
   countBadge: { minWidth: 24, minHeight: 24, paddingHorizontal: 7, borderRadius: 8, backgroundColor: '#EEE5FA', alignItems: 'center', justifyContent: 'center' },
-  countText: { color: '#7B49BE', fontSize: 11, fontWeight: '700' },
+  countText: { color: '#6A1B9A', fontSize: 11, fontWeight: '700' },
   description: { color: '#8B7B99', fontSize: 12, lineHeight: 18, marginBottom: 20 },
   actions: { flexShrink: 0, padding: 20, paddingTop: 18, gap: 12, borderTopWidth: 1, borderColor: '#F0EAF6', backgroundColor: '#FFFFFF' },
   manageButton: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: '#E7DAF7', backgroundColor: '#FAF7FF', borderRadius: 17, paddingHorizontal: 14, paddingVertical: 8 },
   manageIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: '#EEE4FF', alignItems: 'center', justifyContent: 'center' },
-  manageText: { flex: 1, color: '#6930B5', fontSize: 14, fontWeight: '700' },
-  addButton: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#7100FF', borderRadius: 17, paddingHorizontal: 14, paddingVertical: 10, boxShadow: '0px 5px 12px rgba(113, 0, 255, 0.17)' },
+  manageText: { flex: 1, color: '#6A1B9A', fontSize: 14, fontWeight: '700' },
+  addButton: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#6A1B9A', borderRadius: 17, paddingHorizontal: 14, paddingVertical: 10, boxShadow: '0px 5px 12px rgba(106, 27, 154, 0.17)' },
   addIcon: { width: 26, height: 26, borderRadius: 9, backgroundColor: 'rgba(255, 255, 255, 0.17)', alignItems: 'center', justifyContent: 'center' },
   addText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 });

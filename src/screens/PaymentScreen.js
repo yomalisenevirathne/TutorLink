@@ -91,7 +91,7 @@ export default function PaymentScreen({ booking, userId, isDemo = false, cardsVe
 
             <Text style={[styles.sectionTitle, styles.methodTitle]} accessibilityRole="header">Payment Method</Text>
             {cardsLoading ? (
-              <View style={styles.cardsState}><ActivityIndicator color="#7100FF" /><Text style={styles.cardsStateText}>Loading saved cards…</Text></View>
+              <View style={styles.cardsState}><ActivityIndicator color="#6A1B9A" /><Text style={styles.cardsStateText}>Loading saved cards…</Text></View>
             ) : cardsError ? (
               <View style={styles.cardsState}>
                 <Text style={styles.cardsStateText} accessibilityRole="alert">{cardsError}</Text>
@@ -157,7 +157,7 @@ export default function PaymentScreen({ booking, userId, isDemo = false, cardsVe
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#FFFFFF' },
   header: {
-    backgroundColor: '#7100FF', flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#6A1B9A', flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 20, paddingVertical: 18, gap: 16,
   },
   title: { color: '#FFFFFF', fontSize: 20, fontWeight: '700' },
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 17, fontWeight: '700', color: '#111111', marginBottom: 12 },
   detailsCard: {
     borderWidth: 1, borderColor: '#EEE7FA', borderRadius: 3, paddingHorizontal: 10,
-    paddingVertical: 5, shadowColor: '#7100FF', shadowOpacity: 0.08,
+    paddingVertical: 5, shadowColor: '#6A1B9A', shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 2 }, shadowRadius: 2, elevation: 1,
   },
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 15, paddingVertical: 9 },
@@ -194,11 +194,11 @@ const styles = StyleSheet.create({
   cardsState: { padding: 18, borderWidth: 1, borderColor: '#EEE7FA', borderRadius: 5, alignItems: 'center', gap: 9 },
   cardsStateText: { fontSize: 13, color: '#89818D', lineHeight: 20, textAlign: 'center' },
   noCardsTitle: { fontSize: 15, fontWeight: '600', color: '#4B4256' },
-  retryText: { fontSize: 13, fontWeight: '600', color: '#7100FF', padding: 7 },
+  retryText: { fontSize: 13, fontWeight: '600', color: '#6A1B9A', padding: 7 },
   notice: { fontSize: 13, color: '#572883', lineHeight: 20, backgroundColor: '#F6F0FF', padding: 12, marginTop: 16, borderRadius: 5 },
   footer: { paddingHorizontal: 27, paddingBottom: 22, paddingTop: 12 },
   demoNote: { color: '#89818D', fontSize: 11, textAlign: 'center', marginBottom: 9 },
-  payButton: { backgroundColor: '#530099', borderRadius: 3, paddingVertical: 12, alignItems: 'center' },
+  payButton: { backgroundColor: '#6A1B9A', borderRadius: 3, paddingVertical: 12, alignItems: 'center' },
   disabledPayButton: { backgroundColor: '#B9ADC4' },
   payText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   emptyState: { flex: 1, justifyContent: 'center', padding: 28, gap: 18 },

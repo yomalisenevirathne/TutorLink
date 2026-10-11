@@ -42,6 +42,7 @@ export default function PaymentSuccessScreen({ receipt, onDone }) {
           <Text style={styles.amount}>{formatPaymentAmount(receipt)}</Text>
           <Text style={styles.confirmed} accessibilityRole="header">Payment Confirmed</Text>
           <Text style={styles.session}>Your session with{'\n'}{receipt.tutorName}</Text>
+          {!!receipt.bookerName && <Text style={styles.session}>Booked by: {receipt.bookerName}</Text>}
           <Text style={styles.demo}>Demo confirmation · No money charged</Text>
         </View>
         <View style={styles.details}>
@@ -75,7 +76,7 @@ export default function PaymentSuccessScreen({ receipt, onDone }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#FFFFFF' },
-  header: { backgroundColor: '#7100FF', flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 18 },
+  header: { backgroundColor: '#6A1B9A', flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 18 },
   headerTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '700' },
   content: { flexGrow: 1, paddingBottom: 30 },
   confirmation: { alignItems: 'center', paddingTop: 44, paddingHorizontal: 24, paddingBottom: 44 },
@@ -90,7 +91,7 @@ const styles = StyleSheet.create({
   value: { flex: 1, textAlign: 'right', color: '#111111', fontSize: 14, fontWeight: '600' },
   actions: { paddingHorizontal: 28, paddingTop: 38, gap: 10 },
   buttonRow: { flexDirection: 'row', gap: 17 },
-  button: { backgroundColor: '#530099', borderRadius: 3, paddingVertical: 11, alignItems: 'center', minHeight: 38 },
+  button: { backgroundColor: '#6A1B9A', borderRadius: 3, paddingVertical: 11, alignItems: 'center', minHeight: 38 },
   halfButton: { flex: 1 },
   buttonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   disabled: { opacity: 0.65 },

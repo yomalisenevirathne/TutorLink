@@ -49,6 +49,22 @@ test('receipts require a valid booking, owner and selected saved card', () => {
   assert.throws(() => receiptData.createDemoPaymentReceipt(booking, card, ''));
 });
 
+test('checkout snapshots the selected tutor, subject, booker and reservation fields', () => {
+  const selected = { ...booking, tutorId: 'physics-tutor', tutorName: 'Physics Tutor', subject: 'Physics',
+    bookerName: 'Student Name', mode: 'online', groupSize: 'small', sessionFee: 700, platformFee: 50 };
+  const receipt = receiptData.createDemoPaymentReceipt(selected, card, 'owner-1', now);
+  selected.tutorName = 'Other Tutor';
+  assert.equal(receipt.tutorName, 'Physics Tutor');
+  assert.equal(receipt.subject, 'Physics');
+  assert.equal(receipt.bookerName, 'Student Name');
+  assert.equal(receipt.booking.tutorId, 'physics-tutor');
+  assert.equal(receipt.booking.total, 750);
+  assert.equal(receipt.cardId, card.id);
+  const confirmed = { ...receipt, bookingId: 'saved-booking' };
+  assert.match(receiptData.receiptShareText(confirmed), /Booked by: Student Name/);
+  assert.doesNotMatch(receiptData.receiptShareText(confirmed), /no booking was created/);
+});
+
 test('receipt PDF HTML escapes tutor and subject content and includes the demo disclosure', () => {
   const receipt = receiptData.createDemoPaymentReceipt({
     ...booking, tutorName: '<script>alert(1)</script>', subject: 'Data & "Algorithms"',

@@ -231,8 +231,12 @@ export default function BookingSummaryScreen({
           style={[styles.payBtn, isSubmitting && { opacity: 0.7 }]}
           onPress={onNavigateToPayment ? () => onNavigateToPayment({
             year, month, date, slot,
-            tutorName: 'Sarith Samarakoon',
-            subject: 'Data Structures & Algorithms',
+            tutorName,
+            subject,
+            tutorId: currentBooking?.tutorId || currentBooking?.tutor?.id || currentBooking?.discovery_tutor_id || null,
+            tutorPhotoUrl,
+            mode, groupSize,
+            rescheduleId: currentBooking?.rescheduleId || null,
             sessionFee, platformFee, total,
           }) : handlePay}
           disabled={isSubmitting}

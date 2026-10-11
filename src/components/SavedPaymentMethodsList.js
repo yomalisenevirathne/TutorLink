@@ -6,7 +6,7 @@ export default function SavedPaymentMethodsList({ cards, loading, error, onRetry
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const isSettings = variant === 'settings' || variant === 'manage';
   if (loading) return <View style={[styles.state, isSettings && styles.settingsState]} accessibilityRole="progressbar" accessibilityLabel="Loading saved cards">
-    <ActivityIndicator color="#7100FF" /><Text style={styles.hint}>Loading saved cards…</Text>
+    <ActivityIndicator color="#6A1B9A" /><Text style={styles.hint}>Loading saved cards…</Text>
   </View>;
   if (error) return <View style={[styles.state, isSettings && styles.settingsState]}>
     <Text style={styles.hint} accessibilityRole="alert">{error}</Text>
@@ -15,7 +15,7 @@ export default function SavedPaymentMethodsList({ cards, loading, error, onRetry
     </TouchableOpacity>
   </View>;
   if (cards.length === 0) return <View style={[styles.state, isSettings && styles.settingsState]}>
-    <View style={isSettings && styles.emptyIcon}><Feather name="credit-card" size={28} color={isSettings ? '#875CC4' : '#9D91AD'} /></View>
+    <View style={isSettings && styles.emptyIcon}><Feather name="credit-card" size={28} color={isSettings ? '#6A1B9A' : '#9D91AD'} /></View>
     <Text style={styles.emptyTitle}>No saved cards</Text>
     <Text style={styles.hint}>Add a new card to get started.</Text>
   </View>;
@@ -24,7 +24,7 @@ export default function SavedPaymentMethodsList({ cards, loading, error, onRetry
       accessibilityLabel={`${card.brand} card ending in ${card.last4}, expires ${card.expiry}`}>
       <View style={styles.cardSummary}>
         <View style={[styles.icon, isSettings && styles.settingsIcon]}>
-          <Feather name="credit-card" size={25} color={isSettings ? '#FFFFFF' : '#7100FF'} />
+          <Feather name="credit-card" size={25} color={isSettings ? '#FFFFFF' : '#6A1B9A'} />
         </View>
         <View style={styles.details}>
           {isSettings ? <>
@@ -59,7 +59,7 @@ export default function SavedPaymentMethodsList({ cards, loading, error, onRetry
       </View> : <View style={styles.buttons}>
         <TouchableOpacity style={[styles.action, styles.editAction, !!deletingId && styles.disabledAction]} disabled={!!deletingId} onPress={() => onEdit(card)}
           accessibilityRole="button" accessibilityLabel={`Edit ${card.brand} ${card.last4}`}>
-          <Feather name="edit-2" size={15} color="#7100FF" /><Text style={styles.editText}>Edit</Text>
+          <Feather name="edit-2" size={15} color="#6A1B9A" /><Text style={styles.editText}>Edit</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.action, styles.deleteAction, !!deletingId && styles.disabledAction]} disabled={!!deletingId} onPress={() => setConfirmDeleteId(card.id)}
           accessibilityRole="button" accessibilityLabel={`Delete ${card.brand} ${card.last4}`}>
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
   editAction: { backgroundColor: '#F4EEFD' },
   deleteAction: { backgroundColor: '#FFF0F3' },
   disabledAction: { opacity: 0.5 },
-  editText: { color: '#7100FF', fontSize: 13, fontWeight: '700' },
+  editText: { color: '#6A1B9A', fontSize: 13, fontWeight: '700' },
   deleteText: { color: '#C83C43', fontSize: 13, fontWeight: '700' },
   confirmation: { marginTop: 16, backgroundColor: '#FFF6F8', borderRadius: 15, borderWidth: 1, borderColor: '#F8E1E7', padding: 12 },
   confirmHeading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   confirmDeleteAction: { backgroundColor: '#C83C55' },
   confirmDeleteText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
   icon: { width: 43, height: 43, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F5EFFF' },
-  settingsIcon: { width: 56, height: 56, borderRadius: 18, backgroundColor: '#8750D4', boxShadow: '0px 4px 10px rgba(135, 80, 212, 0.17)' },
+  settingsIcon: { width: 56, height: 56, borderRadius: 18, backgroundColor: '#6A1B9A', boxShadow: '0px 4px 10px rgba(106, 27, 154, 0.17)' },
   details: { flex: 1, minWidth: 0 },
   settingsBrand: { color: '#35263F', fontSize: 14, lineHeight: 20, fontWeight: '700' },
   settingsNumber: { color: '#5C476D', fontSize: 14, lineHeight: 20, fontWeight: '600', letterSpacing: 1.5, fontVariant: ['tabular-nums'], marginTop: 1 },
@@ -106,5 +106,5 @@ const styles = StyleSheet.create({
   emptyIcon: { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1E8FF', marginBottom: 4 },
   emptyTitle: { color: '#35263F', fontSize: 15, fontWeight: '700' },
   hint: { color: '#89818D', textAlign: 'center', fontSize: 13, lineHeight: 20 },
-  retry: { color: '#7100FF', fontSize: 14, fontWeight: '700', padding: 10 },
+  retry: { color: '#6A1B9A', fontSize: 14, fontWeight: '700', padding: 10 },
 });

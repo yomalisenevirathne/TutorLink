@@ -28,7 +28,7 @@ export async function getPaymentHistory(userId, { signal } = {}) {
   const payments = [];
   for (let offset = 0; ; offset += PAGE_SIZE) {
     let query = supabase.from('payments')
-      .select('id, user_id, counterparty_name, counterparty_avatar_url, amount, currency, direction, status, occurred_at')
+      .select('*')
       .eq('user_id', user.id)
       .order('occurred_at', { ascending: false })
       .order('id', { ascending: false })

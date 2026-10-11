@@ -58,7 +58,7 @@ export default function EditCardScreen({ userId, cardId, isDemo, onBack, onSaved
     <KeyboardAvoidingView style={styles.body} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false}>
         {loading ? <View style={styles.loadingState}>
-          <ActivityIndicator color="#7100FF" accessibilityLabel="Loading card details" />
+          <ActivityIndicator color="#6A1B9A" accessibilityLabel="Loading card details" />
           <Text style={styles.loadingText}>Loading card details…</Text>
         </View> : card ? <>
           <View style={styles.card} accessibilityLabel={`${card.brand} card ending in ${card.last4}`}>
@@ -78,7 +78,7 @@ export default function EditCardScreen({ userId, cardId, isDemo, onBack, onSaved
             <View style={styles.field}>
               <Text style={styles.label}>Cardholder name</Text>
               <View style={[styles.inputContainer, focusedField === 'name' && styles.focusedInput]}>
-                <Feather name="user" size={18} color={focusedField === 'name' ? '#7100FF' : '#9B8BA8'} />
+                <Feather name="user" size={18} color={focusedField === 'name' ? '#6A1B9A' : '#9B8BA8'} />
                 <TextInput style={styles.input} accessibilityLabel="Cardholder name" value={form.name} maxLength={80}
                   placeholder="Name on your card" placeholderTextColor="#A697B1" returnKeyType="next"
                   onFocus={() => setFocusedField('name')} onBlur={() => setFocusedField(null)}
@@ -89,7 +89,7 @@ export default function EditCardScreen({ userId, cardId, isDemo, onBack, onSaved
             <View style={styles.field}>
               <Text style={styles.label}>Expiry date</Text>
               <View style={[styles.inputContainer, focusedField === 'expiry' && styles.focusedInput]}>
-                <Feather name="calendar" size={18} color={focusedField === 'expiry' ? '#7100FF' : '#9B8BA8'} />
+                <Feather name="calendar" size={18} color={focusedField === 'expiry' ? '#6A1B9A' : '#9B8BA8'} />
                 <TextInput ref={expiryInput} style={styles.input} accessibilityLabel="Expiry date" value={form.expiry}
                   placeholder="MM / YY" placeholderTextColor="#A697B1" keyboardType="number-pad" maxLength={7} autoComplete="off" editable={!busy}
                   onFocus={() => setFocusedField('expiry')} onBlur={() => setFocusedField(null)}
@@ -98,7 +98,7 @@ export default function EditCardScreen({ userId, cardId, isDemo, onBack, onSaved
             </View>
           </View>
           <View style={styles.notePanel}>
-            <Feather name="info" size={17} color="#946CC4" />
+            <Feather name="info" size={17} color="#6A1B9A" />
             <Text style={styles.note}>To use a different card number, add a new card.</Text>
           </View>
         </> : <View style={styles.failure}>
@@ -124,14 +124,14 @@ export default function EditCardScreen({ userId, cardId, isDemo, onBack, onSaved
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#FAF8FD' },
-  header: { minHeight: 76, backgroundColor: '#7100FF', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 8, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, boxShadow: '0px 6px 16px rgba(89, 27, 166, 0.14)' },
+  header: { minHeight: 76, backgroundColor: '#6A1B9A', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 8, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, boxShadow: '0px 6px 16px rgba(106, 27, 154, 0.14)' },
   backButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   title: { flex: 1, color: '#FFFFFF', fontSize: 20, fontWeight: '700', letterSpacing: -0.5 },
   body: { flex: 1 },
   content: { width: '100%', maxWidth: 600, alignSelf: 'center', padding: 20, paddingTop: 28, gap: 20 },
   loadingState: { minHeight: 180, alignItems: 'center', justifyContent: 'center', gap: 14 },
   loadingText: { color: '#8B7B99', fontSize: 13 },
-  card: { padding: 22, borderRadius: 24, backgroundColor: '#7941CA', gap: 20, boxShadow: '0px 8px 20px rgba(104, 55, 176, 0.18)' },
+  card: { padding: 22, borderRadius: 24, backgroundColor: '#6A1B9A', gap: 20, boxShadow: '0px 8px 20px rgba(106, 27, 154, 0.18)' },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   cardBrand: { flex: 1, color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   cardIcon: { width: 40, height: 36, borderRadius: 12, backgroundColor: 'rgba(255, 255, 255, 0.15)', alignItems: 'center', justifyContent: 'center' },
@@ -145,15 +145,15 @@ const styles = StyleSheet.create({
   field: { gap: 9, marginBottom: 16 },
   label: { color: '#5D4B6C', fontSize: 12, fontWeight: '600' },
   inputContainer: { minHeight: 52, borderWidth: 1, borderColor: '#E6DDED', borderRadius: 14, backgroundColor: '#FDFBFF', paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  focusedInput: { borderColor: '#AD7DEF', backgroundColor: '#FAF6FF' },
+  focusedInput: { borderColor: '#6A1B9A', backgroundColor: '#FAF6FF' },
   input: { flex: 1, minWidth: 0, minHeight: 50, paddingVertical: 12, fontSize: 14, color: '#35263F' },
   notePanel: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingHorizontal: 14, paddingVertical: 14, backgroundColor: '#F1EAF9', borderRadius: 15 },
   note: { flex: 1, color: '#886E9E', fontSize: 12, lineHeight: 19 },
   error: { color: '#AD354A', backgroundColor: '#FFF0F3', borderWidth: 1, borderColor: '#F7DDE3', borderRadius: 16, padding: 14, fontSize: 13, lineHeight: 20 },
   failure: { gap: 12 },
-  retry: { color: '#7100FF', fontWeight: '700', padding: 12, textAlign: 'center' },
+  retry: { color: '#6A1B9A', fontWeight: '700', padding: 12, textAlign: 'center' },
   footer: { width: '100%', maxWidth: 600, alignSelf: 'center', padding: 20, paddingTop: 16, backgroundColor: '#FAF8FD' },
-  saveButton: { minHeight: 54, backgroundColor: '#7100FF', borderRadius: 17, flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center', justifyContent: 'center', boxShadow: '0px 5px 12px rgba(113, 0, 255, 0.17)' },
+  saveButton: { minHeight: 54, backgroundColor: '#6A1B9A', borderRadius: 17, flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center', justifyContent: 'center', boxShadow: '0px 5px 12px rgba(106, 27, 154, 0.17)' },
   saveText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
   disabled: { opacity: 0.5 },
 });

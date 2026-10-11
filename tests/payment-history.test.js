@@ -124,6 +124,17 @@ test('status filters and search use database records and preserve monthly groups
   assert.throws(() => formatting.mapPaymentRecord({ ...row, amount: 'invalid' }), /invalid record/);
 });
 
+test('payment history shows and searches names and subjects persisted with the booking', () => {
+  const record = formatting.mapPaymentRecord({ ...row, counterparty_name: 'Physics Tutor',
+    subject: 'Physics', booker_name: 'Booking Student', tutor_id: 'tutor-42', booking_id: 'booking-1' });
+  assert.equal(record.name, 'Physics Tutor');
+  assert.equal(record.bookerName, 'Booking Student');
+  assert.equal(record.subject, 'Physics');
+  assert.equal(record.bookingId, 'booking-1');
+  assert.equal(formatting.getPaymentSections([record], 'physics')[0].data.length, 1);
+  assert.equal(formatting.getPaymentSections([record], 'booking student')[0].data.length, 1);
+});
+
 test('successful login returns the Supabase UUID and never a mock token', async () => {
   const supabase = { auth: { signInWithPassword: async () => ({
     data: { user: { id: userId, email: 'test@example.com', user_metadata: { fullName: 'Test User', role: 'Tutor' } }, session: { access_token: 'real-session-token' } }, error: null,

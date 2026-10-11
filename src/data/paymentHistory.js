@@ -20,6 +20,10 @@ export function mapPaymentRecord(record) {
     direction: record.direction,
     status: record.status,
     avatarUrl: record.counterparty_avatar_url || null,
+    subject: record.subject || null,
+    bookerName: record.booker_name || null,
+    tutorId: record.tutor_id || null,
+    bookingId: record.booking_id || null,
   };
 }
 
@@ -50,7 +54,7 @@ export function getPaymentSections(payments, search = '', status = 'All') {
 
   [...payments]
     .filter((payment) => {
-      const matchesSearch = `${payment.name} ${formatPaymentAmount(payment)} ${formatPaymentDate(payment.occurredAt)} ${payment.status} ${payment.reference || ''} ${payment.subject || ''} ${payment.cardLast4 || ''}`.toLowerCase().includes(query);
+      const matchesSearch = `${payment.name} ${payment.bookerName || ''} ${formatPaymentAmount(payment)} ${formatPaymentDate(payment.occurredAt)} ${payment.status} ${payment.reference || ''} ${payment.subject || ''} ${payment.cardLast4 || ''}`.toLowerCase().includes(query);
       return matchesSearch && (status === 'All' || payment.status === status);
     })
     .sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt))

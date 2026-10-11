@@ -1,6 +1,6 @@
 import { getPaymentIdentity } from './paymentIdentity';
 
-const columns = 'id, user_id, reference, counterparty_name, amount, currency, status, subject, session_date, session_time, card_brand, card_last4, occurred_at';
+const columns = '*';
 const missingTable = (error) => ['PGRST205', '42P01'].includes(error?.code);
 
 function checkCancelled(signal) {
@@ -25,11 +25,12 @@ function verifyRecord(record, ownerId) {
 }
 
 function saveError(error) {
-  if (missingTable(error) || ['42703', 'PGRST204'].includes(error?.code)) {
-    const unavailable = new Error('Demo payment history storage is not set up yet. Please run the demo payment SQL setup.');
+  if (missingTable(error) || ['42703', 'PGRST204', 'PGRST202', '42883'].includes(error?.code)) {
+    const unavailable = new Error('Booking payment storage needs an update. Run supabase_booking_payments.sql in your Supabase SQL Editor.');
     unavailable.code = 'DEMO_PAYMENT_STORAGE_UNAVAILABLE';
     return unavailable;
   }
+  if (error?.code === 'P0001' && error.message) return new Error(error.message);
   return new Error('Your payment history could not be saved. Please try again.');
 }
 
@@ -50,6 +51,27 @@ export async function saveDemoPayment(receipt, { isDemo = false } = {}) {
     session_date: receipt.sessionDate, session_time: receipt.time,
     card_brand: receipt.brand, card_last4: receipt.last4,
   };
+  if (receipt.booking) {
+    const { data, error } = await client.rpc('record_booking_payment', {
+      p_reference: receipt.reference, p_card_id: receipt.cardId, p_booking: receipt.booking,
+    });
+    if (error) throw saveError(error);
+    const saved = data?.payment;
+    verifyRecord(saved, userId);
+    for (const [key, value] of Object.entries(input)) {
+      if ((key === 'amount' ? Number(saved[key]) : saved[key]) !== value)
+        throw new Error('The saved payment does not match your booking. Please try again.');
+    }
+    if (!data.booking?.id || data.booking.id !== saved.booking_id
+      || data.booking.student_id !== userId || data.booking.tutor_name !== saved.counterparty_name
+      || data.booking.subject !== saved.subject || !saved.booker_name?.trim()
+      || Number(data.booking.total_fee) !== receipt.amount || data.booking.slot !== receipt.time
+      || data.booking.session_date !== receipt.sessionDate || data.booking.status !== 'Confirmed'
+      || (receipt.tutorId && saved.tutor_id !== receipt.tutorId)) {
+      throw new Error('Your booking and payment could not be confirmed together. Please try again.');
+    }
+    return { ...saved, booking: { ...data.booking, month: Number(data.booking.month) - 1 } };
+  }
   let { data, error } = await client.from('demo_payments').insert(input).select(columns).single();
   if (error?.code === '23505') {
     // A response may be lost after committing. Reuse that exact owner's reference.
@@ -89,7 +111,9 @@ export async function getDemoPaymentHistory(userId, { isDemo = false, signal } =
       records.push({
         id: `demo:${row.id}`, name: row.counterparty_name, amount: Number(row.amount),
         currency: row.currency, occurredAt: row.occurred_at, direction: 'Sent', status: 'Demo',
-        avatarUrl: null, reference: row.reference, subject: row.subject,
+        avatarUrl: row.counterparty_avatar_url || null, reference: row.reference, subject: row.subject,
+        bookerName: row.booker_name || null, tutorId: row.tutor_id || null,
+        bookingId: row.booking_id || null, sessionDate: row.session_date, sessionTime: row.session_time,
         cardLast4: row.card_last4, cardBrand: row.card_brand,
       });
     }

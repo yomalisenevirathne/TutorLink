@@ -40,7 +40,7 @@ export default function PaymentProcessingScreen({ receipt, isDemo = false, onCom
         <Text style={styles.amount}>{formatPaymentAmount(receipt)}</Text>
         <Text style={styles.title} accessibilityRole="header">{error ? 'Payment history not saved' : 'Confirming your payment'}</Text>
         <View style={styles.tutorBadge}>
-          <View style={styles.avatar}><Feather name="user" size={22} color="#530099" /></View>
+          <View style={styles.avatar}><Feather name="user" size={22} color="#6A1B9A" /></View>
           <Text style={styles.tutor}>Paying {receipt.tutorName}</Text>
         </View>
         {error ? <>
@@ -68,14 +68,14 @@ const styles = StyleSheet.create({
   ring: { width: 86, height: 86, borderRadius: 43, borderWidth: 8, borderColor: '#C8C8C8', borderLeftColor: '#1BC864', borderBottomColor: '#1BC864', marginBottom: 14 },
   amount: { fontSize: 23, fontWeight: '700', color: '#111111', marginBottom: 4 },
   title: { fontSize: 18, fontWeight: '700', color: '#111111', textAlign: 'center', marginBottom: 12 },
-  tutorBadge: { backgroundColor: '#530099', borderRadius: 4, padding: 5, paddingRight: 13, flexDirection: 'row', alignItems: 'center', gap: 11, maxWidth: '100%' },
+  tutorBadge: { backgroundColor: '#6A1B9A', borderRadius: 4, padding: 5, paddingRight: 13, flexDirection: 'row', alignItems: 'center', gap: 11, maxWidth: '100%' },
   avatar: { width: 30, height: 30, borderRadius: 3, backgroundColor: '#EDE2FF', alignItems: 'center', justifyContent: 'center' },
   tutor: { flexShrink: 1, color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   hint: { color: '#A4A4A4', fontSize: 14, fontWeight: '600', lineHeight: 19, textAlign: 'center', marginTop: 13 },
   footer: { flexDirection: 'row', gap: 7, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 15, paddingBottom: 23 },
   demo: { flexShrink: 1, color: '#AAA4AD', fontSize: 12, fontWeight: '600', textAlign: 'center' },
   error: { backgroundColor: '#FFF1F1', color: '#A33333', borderRadius: 5, padding: 12, fontSize: 13, lineHeight: 20, textAlign: 'center', marginTop: 18 },
-  retry: { backgroundColor: '#530099', borderRadius: 3, paddingVertical: 12, paddingHorizontal: 30, marginTop: 16 },
+  retry: { backgroundColor: '#6A1B9A', borderRadius: 3, paddingVertical: 12, paddingHorizontal: 30, marginTop: 16 },
   retryText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-  backText: { color: '#530099', fontSize: 13, padding: 14 },
+  backText: { color: '#6A1B9A', fontSize: 13, padding: 14 },
 });

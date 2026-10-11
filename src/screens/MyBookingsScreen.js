@@ -140,6 +140,9 @@ export default function MyBookingsScreen({
   const handleReschedule = (item) => {
     navigation?.navigate('ScheduleScreen', {
       rescheduleId: item.id,
+      tutorName: item.tutor_name || item.tutorName,
+      tutorId: item.discovery_tutor_id || null,
+      subject: item.subject,
       mode: item.mode,
       groupSize: item.group_size,
       year: item.year || new Date().getFullYear(),

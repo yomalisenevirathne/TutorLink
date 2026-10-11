@@ -36,9 +36,9 @@ import BookingSuccessScreen from './src/screens/BookingSuccessScreen';
 // `screen` is reserved by Expo Router/React Navigation; use `page` for our route.
 const screenPath = (screen) => ({ pathname: '/[page]', params: { page: screen } });
 const searchScreens = ['SearchHomeScreen', 'SearchScreen', 'ResultsScreen', 'CompareScreen', 'FavoritesScreen', 'SearchTutorProfileScreen'];
-const publicScreens = ['loading', 'login', 'selection', 'tutorReg', 'studentReg', 'verifyOtp', ...searchScreens];
+const publicScreens = ['loading', 'login', 'selection', 'tutorReg', 'studentReg', 'verifyOtp'];
 const bookingScreens = ['ScheduleScreen', 'SessionPreferencesScreen', 'BookingSummaryScreen', 'BookingSuccessScreen', 'MyBookingsScreen', 'ManageSessionScreen'];
-const allScreens = [...publicScreens, ...bookingScreens, 'studentProfile', 'tutorProfile', 'testingfeedback', 'feedbackComments', 'paymentHistory', 'payment', 'addCard', 'editCard', 'paymentProcessing', 'paymentSuccess', 'managePayments'];
+const allScreens = [...publicScreens, ...searchScreens, ...bookingScreens, 'studentProfile', 'tutorProfile', 'testingfeedback', 'feedbackComments', 'paymentHistory', 'payment', 'addCard', 'editCard', 'paymentProcessing', 'paymentSuccess', 'managePayments'];
 
 
 // --- upeksha's Search Flow ---
@@ -73,11 +73,15 @@ export default function App() {
   const paymentReceipt = currentBooking.paymentReceipt;
   const hasPaymentReceipt = paymentReceipt?.isDemo === true && paymentReceipt.ownerId === currentUser?.id;
   const finishPaymentDemo = useCallback((saved) => {
+    if (saved.booking) {
+      setMyBookings((previous) => [saved.booking, ...previous.filter((booking) => booking.id !== saved.booking.id)]);
+    }
     setCurrentBooking((previous) => ({ ...previous, paymentReceipt: {
-      ...previous.paymentReceipt, paymentId: saved.id,
-    } }));
+      ...previous.paymentReceipt, paymentId: saved.id, bookingId: saved.booking_id || null,
+      bookerName: saved.booker_name || previous.paymentReceipt.bookerName,
+    }, rescheduleId: null }));
     router.replace(screenPath('paymentSuccess'));
-  }, [setCurrentBooking]);
+  }, [setCurrentBooking, setMyBookings]);
   const isBookingScreen = bookingScreens.includes(currentScreen);
   const isTutorUser = String(currentUser?.role || '').trim().toLowerCase() === 'tutor';
   const accountScreen = isTutorUser ? 'tutorProfile' : 'studentProfile';
@@ -113,7 +117,7 @@ export default function App() {
       if (!allScreens.includes(target)) return;
       setCurrentBooking((previous) => {
         const tutorData = params.tutor || (params.tutorName ? {
-          id: params.tutorId || previous.tutor?.id,
+          id: params.tutorId ?? (params.tutorName === previous.tutor?.name ? previous.tutor?.id : null),
           name: params.tutorName,
           subject: params.subject || previous.tutor?.subject,
           role: params.role || previous.tutor?.role || 'University Tutor',
@@ -148,7 +152,7 @@ export default function App() {
 
   return (
       <SafeAreaView
-        style={[styles.safeArea, (isPaymentArea || isFeedbackArea) && styles.paymentSafeArea, isBookingScreen && styles.bookingSafeArea, isPaymentProcessing && styles.processingSafeArea]}
+        style={[styles.safeArea, isPaymentArea && styles.paymentSafeArea, isFeedbackArea && styles.feedbackSafeArea, isBookingScreen && styles.bookingSafeArea, isPaymentProcessing && styles.processingSafeArea]}
         edges={isPaymentArea ? ['top', 'left', 'right'] : ['top', 'left', 'right', 'bottom']}
       >
         <StatusBar barStyle={(isPaymentArea && !isPaymentProcessing) || isBookingScreen || isFeedbackArea ? 'light-content' : 'dark-content'} />
@@ -163,11 +167,7 @@ export default function App() {
             <LoginScreen
               onLoginSuccess={(user) => {
                 setCurrentUser(user);
-                if (user.role === 'Tutor') {
-                  setCurrentScreen('tutorProfile');
-                } else {
-                  setCurrentScreen('studentProfile');
-                }
+                setCurrentScreen('SearchHomeScreen');
               }}
               onNavigateToRegister={() => setCurrentScreen('selection')}
             />
@@ -301,7 +301,9 @@ export default function App() {
             navigation={navigation}
             currentBooking={currentBooking}
             onConfirm={handleConfirmBooking}
-            onNavigateToPayment={(checkout) => navigation.navigate('payment', { checkout })}
+            onNavigateToPayment={(checkout) => navigation.navigate('payment', {
+              checkout: { ...checkout, bookerName: currentUser.fullName || currentUser.name || currentUser.email },
+            })}
           />
         )}
 
@@ -339,7 +341,7 @@ export default function App() {
             <SearchTutorProfileScreen navigation={navigation} id={currentBooking.tutorId} />
           )}
       </View>
-      <BottomTabBar currentScreen={currentScreen} navigation={navigation} accountScreen={accountScreen} includeBottomInset={isPaymentArea} />
+      {currentUser && <BottomTabBar currentScreen={currentScreen} navigation={navigation} accountScreen={accountScreen} includeBottomInset={isPaymentArea} />}
       </SafeAreaView>
   );
 }
@@ -349,7 +351,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  paymentSafeArea: { backgroundColor: '#7100FF' },
+  paymentSafeArea: { backgroundColor: '#6A1B9A' },
+  feedbackSafeArea: { backgroundColor: '#7100FF' },
   processingSafeArea: { backgroundColor: '#FFFFFF' },
   bookingSafeArea: { backgroundColor: '#6A1B9A' },
   content: {
