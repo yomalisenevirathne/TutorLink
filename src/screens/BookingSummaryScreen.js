@@ -260,7 +260,7 @@ export default function BookingSummaryScreen({
         }}
         onBackToHome={() => {
           setIsSuccessModalVisible(false);
-          navigation?.navigate('ScheduleScreen');
+          navigation?.navigate('SearchHomeScreen');
         }}
       />
     </View>

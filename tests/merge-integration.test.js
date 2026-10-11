@@ -39,7 +39,7 @@ function app(page, role = 'Student', initialState = {}) {
     if (name === 'react/jsx-runtime') return require(name);
     if (name === 'expo-router') return {
       useLocalSearchParams: () => ({ page }),
-      router: { navigate: (route) => routes.push(route), replace: (route) => routes.push(route) },
+      router: { navigate: (route) => routes.push(route), replace: (route) => routes.push(route), canDismiss: () => false },
       Redirect: 'Redirect',
     };
     if (name === 'react-native') return {
@@ -145,6 +145,27 @@ test('confirmed linked payment updates My Bookings and receipt without duplicati
   assert.equal(state.currentBooking.paymentReceipt.paymentId, 'payment-1');
   assert.equal(state.currentBooking.rescheduleId, null);
   assert.equal(routes[0].params.page, 'paymentSuccess');
+});
+
+test('payment confirmation destinations clear checkout state and retain the confirmed booking', () => {
+  for (const [action, destination] of [
+    ['onGoToBookings', 'MyBookingsScreen'],
+    ['onBackToHome', 'SearchHomeScreen'],
+    ['onDone', 'paymentHistory'],
+  ]) {
+    const booking = { id: 'booking-1', status: 'Confirmed' };
+    const { state, routes, elements } = app('paymentSuccess', 'Student', {
+      currentBooking: { checkout: { tutorName: 'Selected Tutor' }, cardsVersion: 3,
+        paymentReceipt: { isDemo: true, ownerId: 'user-1', paymentId: 'payment-1', bookingId: booking.id } },
+      myBookings: [booking],
+    });
+    elements.find(element => element.type === 'PaymentSuccessScreen').props[action]();
+    assert.equal(routes.at(-1).params.page, destination);
+    assert.equal(state.currentBooking.checkout, undefined);
+    assert.equal(state.currentBooking.paymentReceipt, undefined);
+    assert.equal(state.currentBooking.cardsVersion, 3);
+    assert.deepEqual(state.myBookings, [booking]);
+  }
 });
 
 test('signed-out users cannot open Home or discovery screens through direct routes', () => {

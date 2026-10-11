@@ -5,11 +5,18 @@ import Feather from '@expo/vector-icons/Feather';
 import { formatPaymentAmount } from '../data/paymentHistory';
 import { receiptRows } from '../data/paymentReceipt';
 import { downloadPaymentReceipt, sharePaymentReceipt } from '../services/paymentReceiptActions';
+import BookingSuccessModal from '../components/BookingSuccessModal';
 
-export default function PaymentSuccessScreen({ receipt, onDone }) {
+export default function PaymentSuccessScreen({ receipt, onDone, onGoToBookings, onBackToHome }) {
   const [busy, setBusy] = useState('');
   const [notice, setNotice] = useState('');
+  const [bookingConfirmedVisible, setBookingConfirmedVisible] = useState(false);
   const actionInProgress = useRef(false);
+
+  const finishPayment = () => {
+    if (receipt.bookingId) setBookingConfirmedVisible(true);
+    else onDone();
+  };
 
   async function receiptAction(action) {
     if (actionInProgress.current) return;
@@ -64,12 +71,16 @@ export default function PaymentSuccessScreen({ receipt, onDone }) {
               {busy === 'pdf' ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Download PDF</Text>}
             </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.button} accessibilityRole="button" accessibilityLabel="Done" onPress={onDone}>
+          <TouchableOpacity style={styles.button} accessibilityRole="button" accessibilityLabel="Done" onPress={finishPayment}>
             <Text style={styles.buttonText}>Done</Text>
           </TouchableOpacity>
           {!!notice && <Text style={styles.notice} accessibilityRole="alert">{notice}</Text>}
         </View>
       </ScrollView>
+      <BookingSuccessModal visible={bookingConfirmedVisible}
+        bookingDetails={{ tutorName: receipt.tutorName, sessionDate: receipt.date, slot: receipt.time }}
+        onClose={() => setBookingConfirmedVisible(false)}
+        onGoToBookings={onGoToBookings} onBackToHome={onBackToHome} />
     </SafeAreaView>
   );
 }

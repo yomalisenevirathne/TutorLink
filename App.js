@@ -86,10 +86,10 @@ export default function App() {
   const isTutorUser = String(currentUser?.role || '').trim().toLowerCase() === 'tutor';
   const accountScreen = isTutorUser ? 'tutorProfile' : 'studentProfile';
   const openAccount = () => setCurrentScreen(accountScreen);
-  const finishPaymentFlow = () => {
+  const finishPaymentFlow = (destination = 'paymentHistory') => {
     setCurrentBooking((previous) => ({ ...previous, checkout: undefined, paymentReceipt: undefined }));
     if (router.canDismiss()) router.dismissAll();
-    setCurrentScreen('paymentHistory');
+    setCurrentScreen(destination);
   };
   const handleConfirmBooking = (booking) => {
     setMyBookings((previous) => [booking, ...previous.filter((item) => item.id !== booking.id)]);
@@ -267,7 +267,9 @@ export default function App() {
             paymentReceipt: createDemoPaymentReceipt(currentBooking.checkout, card, currentUser.id),
           })} />}
         {isPaymentProcessing && <PaymentProcessingScreen receipt={paymentReceipt} isDemo={!!currentUser.isDemo} onComplete={finishPaymentDemo} onBack={() => navigation.goBack()} />}
-        {isPaymentSuccess && <PaymentSuccessScreen receipt={paymentReceipt} onDone={finishPaymentFlow} />}
+        {isPaymentSuccess && <PaymentSuccessScreen receipt={paymentReceipt} onDone={() => finishPaymentFlow()}
+          onGoToBookings={() => finishPaymentFlow('MyBookingsScreen')}
+          onBackToHome={() => finishPaymentFlow('SearchHomeScreen')} />}
         {isAddCardScreen && <AddCardScreen userId={currentUser.id} isDemo={!!currentUser.isDemo} onBack={() => navigation.goBack()}
           backLabel={currentBooking.addCardReturnTo === 'paymentHistory' ? 'Back to payment history' : currentBooking.addCardReturnTo === 'managePayments' ? 'Back to manage payments' : 'Back to payment'}
           onSaved={() => {

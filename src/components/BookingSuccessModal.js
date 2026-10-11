@@ -8,13 +8,14 @@ export default function BookingSuccessModal({
   bookingDetails,
   onGoToBookings,
   onBackToHome,
+  onClose,
 }) {
-  const { date = 15, slot = '6:00 PM', tutorName = 'Sarith Samarakoon' } = bookingDetails || {};
+  const { date = 15, sessionDate, slot = '6:00 PM', tutorName = 'Sarith Samarakoon' } = bookingDetails || {};
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose || onBackToHome}>
       <View style={styles.overlay}>
-        <View style={styles.modalCard}>
+        <View style={styles.modalCard} accessibilityViewIsModal onAccessibilityEscape={onClose || onBackToHome}>
           {/* Green Check Icon Circle */}
           <View style={styles.checkCircleWrapper}>
             <View style={styles.checkCircle}>
@@ -23,13 +24,13 @@ export default function BookingSuccessModal({
           </View>
 
           {/* Title */}
-          <Text style={styles.title}>Booking Confirmed!</Text>
+          <Text style={styles.title} accessibilityRole="header">Booking Confirmed!</Text>
 
           {/* Subtitle / Description */}
           <Text style={styles.description}>
             Your session with <Text style={styles.boldText}>{tutorName}</Text> has been successfully booked for{' '}
             <Text style={styles.highlightText}>
-              Date {date} at {slot}
+              {sessionDate || `Date ${date}`} at {slot}
             </Text>
             .
           </Text>
@@ -39,6 +40,7 @@ export default function BookingSuccessModal({
             style={styles.primaryBtn}
             onPress={onGoToBookings}
             activeOpacity={0.85}
+            accessibilityRole="button" accessibilityLabel="Go to My Bookings"
           >
             <Text style={styles.primaryBtnText}>Go to My Bookings</Text>
           </TouchableOpacity>
@@ -48,6 +50,7 @@ export default function BookingSuccessModal({
             style={styles.secondaryBtn}
             onPress={onBackToHome}
             activeOpacity={0.7}
+            accessibilityRole="button" accessibilityLabel="Back to Home"
           >
             <Text style={styles.secondaryBtnText}>Back to Home</Text>
           </TouchableOpacity>
@@ -63,20 +66,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    padding: 20,
   },
   modalCard: {
     width: '100%',
+    maxWidth: 400,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     paddingVertical: 28,
     paddingHorizontal: 20,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    boxShadow: '0px 6px 24px rgba(0, 0, 0, 0.15)',
   },
   checkCircleWrapper: {
     width: 64,
@@ -123,6 +123,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#D48B06',
     borderRadius: 10,
     paddingVertical: 13,
+    minHeight: 44,
     alignItems: 'center',
     marginBottom: 8,
   },
@@ -134,6 +135,7 @@ const styles = StyleSheet.create({
   secondaryBtn: {
     width: '100%',
     paddingVertical: 11,
+    minHeight: 44,
     alignItems: 'center',
   },
   secondaryBtnText: {
