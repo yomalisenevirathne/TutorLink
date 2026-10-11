@@ -1,16 +1,17 @@
 import 'react-native-url-polyfill/auto';
 import * as SecureStore from 'expo-secure-store';
 import { createClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 
 const ExpoSecureStoreAdapter = {
   getItem: (key) => {
     return SecureStore.getItemAsync(key);
   },
   setItem: (key, value) => {
-    SecureStore.setItemAsync(key, value);
+    return SecureStore.setItemAsync(key, value);
   },
   removeItem: (key) => {
-    SecureStore.deleteItemAsync(key);
+    return SecureStore.deleteItemAsync(key);
   },
 };
 
@@ -23,7 +24,8 @@ const SUPABASE_KEY =
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
-    storage: ExpoSecureStoreAdapter,
+    // Let Supabase use browser localStorage on web; SecureStore is native-only.
+    storage: Platform.OS === 'web' ? undefined : ExpoSecureStoreAdapter,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
