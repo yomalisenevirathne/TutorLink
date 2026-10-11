@@ -85,10 +85,6 @@ export default function TutorFeedbackDrawer({ tutor, user, onClose, onViewCommen
           <TouchableOpacity style={feedbackStyles.retry} onPress={feedback.refresh} accessibilityRole="button">
             <Text style={feedbackStyles.linkText}>Retry</Text>
           </TouchableOpacity>
-        </View> : tutor.canReceiveFeedback === false ? <View style={[feedbackStyles.state, { flex: 1 }]}>
-          <FeedbackAvatar name={tutor.fullName} uri={tutor.avatarUrl} />
-          <Text style={feedbackStyles.sectionTitle}>{tutor.fullName}</Text>
-          <Text style={feedbackStyles.stateText}>Feedback is not available for this tutor yet.</Text>
         </View> : ratingMode ? <>
           <View style={styles.entryHeading}>
             <TouchableOpacity style={styles.entryBack} onPress={finishEntry} disabled={feedback.busy}
@@ -117,6 +113,11 @@ export default function TutorFeedbackDrawer({ tutor, user, onClose, onViewCommen
           onContentSizeChange={(_, contentHeight) => setSummaryContentHeight(Math.ceil(contentHeight))}>
             <FeedbackRatingCard tutor={tutor} summary={feedback.summary} ownRating={feedback.ownRating}
               onRate={feedback.rate} busy={feedback.busy} summaryMode />
+            <TouchableOpacity style={styles.doneButton} onPress={() => setRatingMode(true)} disabled={feedback.busy}
+              accessibilityRole="button" accessibilityLabel={`Rate your session with ${tutor.fullName}`}
+              accessibilityState={{ disabled: feedback.busy }}>
+              <Text style={styles.doneText}>{feedback.ownRating ? 'Update your rating' : 'Rate your session'}</Text>
+            </TouchableOpacity>
             {!!feedback.saveError && <Text style={feedbackStyles.error} accessibilityRole="alert">{feedback.saveError}</Text>}
           <View style={[styles.commentPanel, styles.summaryCommentPanel]}>
             <View style={styles.commentHeading}>

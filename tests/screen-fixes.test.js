@@ -399,3 +399,40 @@ test('Home shows a retry message when the merged directory cannot be read', asyn
   await flush();
   assert.equal(attempts, 2);
 });
+
+test('a profile-only Tutor opens editable rating controls in the feedback drawer', async () => {
+  const ratings = [];
+  const tutor = { id: 'd96130e6-002a-41b0-a8f2-b0e6c814a98c', fullName: 'kasunbandara', subjects: [] };
+  const native = new Proxy({
+    StyleSheet: { create: value => value }, Platform: { OS: 'android' },
+    Keyboard: { dismiss: () => {} }, useWindowDimensions: () => ({ height: 800 }),
+    Animated: { Value: class { setValue() {} }, View: 'AnimatedView',
+      timing: () => ({ start: () => {}, stop: () => {} }) },
+    Easing: { out: value => value, cubic: 'cubic' },
+    PanResponder: { create: () => ({ panHandlers: {} }) },
+  }, { get: (target, key) => key in target ? target[key] : key });
+  const view = screen('src/components/TutorFeedbackDrawer.js', {
+    'react-native': native,
+    '@expo/vector-icons/Feather': { __esModule: true, default: 'Feather' },
+    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }) },
+    '../hooks/useTutorFeedback': { __esModule: true, default: tutorId => ({
+      comments: [], ownRating: 0, loading: false, loadError: '', busy: false,
+      summary: { average: 0, total: 0, distribution: {} },
+      rate: value => { ratings.push({ tutorId, value }); },
+    }) },
+    './FeedbackViews': { FeedbackAvatar: 'FeedbackAvatar', FeedbackComposer: 'FeedbackComposer',
+      FeedbackRatingCard: 'FeedbackRatingCard', feedbackStyles: {} },
+  });
+  const props = { tutor, user: { id: 'viewer' }, onClose: () => {} };
+  let tree = view.render(props);
+  assert.ok(nodes(tree).some(node => node.type === 'FeedbackRatingCard'));
+  const open = nodes(tree).find(node => node.props.accessibilityLabel === `Rate your session with ${tutor.fullName}`);
+  assert.ok(open);
+  assert.equal(open.props.disabled, false);
+  open.props.onPress();
+  tree = view.render(props);
+  const card = nodes(tree).find(node => node.type === 'FeedbackRatingCard');
+  assert.ok(!card.props.summaryMode);
+  await card.props.onRate(5);
+  assert.deepEqual(ratings, [{ tutorId: tutor.id, value: 5 }]);
+});

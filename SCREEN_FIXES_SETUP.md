@@ -22,9 +22,9 @@ integration step. Review database changes with the owner of the existing feature
   profiles. SQL Editor results alone do not establish app access. Read failures
   display a retry message; policies that silently restrict rows still limit the
   visible directory. No permissions are changed by these code changes.
-- Feedback writes in the existing schema reference `tutors.id`. Accounts without
-  a published listing can be viewed and selected for booking; their feedback
-  screen displays an unavailable message until an existing listing is linked.
+- The feedback UI accepts both listing and Tutor account IDs. The targeted
+  `supabase_profile_tutor_feedback_fix.sql` enables those profile UUIDs in the
+  existing feedback backend while preserving rating limits and viewer ownership.
 - Session saves update existing rows for the same tutor/date, including removed
   slots, rather than inserting another record on every save.
 - Calendar queries show only the selected tutor's configured slots. Tutor session
@@ -79,6 +79,28 @@ Optional SQL tests use a separately installed `@electric-sql/pglite` package at
 `TUTORLINK_PGLITE_PATH` (or the temporary TutorLink SQL verification directory).
 They reproduce the original failure, verify both Tutor sources, deny Student
 profiles and foreign cards, and check retries, rescheduling and rollback.
+
+## Ratings for Tutor accounts without a discovery listing
+
+Copy all of `supabase_profile_tutor_feedback_fix.sql` into the same Supabase
+project's SQL Editor, run it, then refresh the app and open the Tutor's feedback.
+Both Tutor sources use the existing `tutor_ratings`, `tutor_comments`, and
+`tutor_comment_reactions` tables. No tutor row copy or new table is required.
+
+The patch replaces only single-column cascading tutor identity foreign keys
+with validation triggers that accept an existing listing ID or an exact Tutor
+profile UUID. Author foreign keys, same-tutor reply/reaction foreign keys, rating
+limits and existing data stay in place. Source-row locks and delete cleanup
+maintain tutor identity integrity. Added profile-specific RLS policies let the
+verified viewer insert/update only their own rating and insert their own
+comments; existing policies, grants and other restrictions remain installed.
+
+The patch stops for missing feedback tables, incompatible tutor ID types,
+disabled RLS or an unrecognized tutor foreign key. If it stops, inspect/send that
+table's existing definition rather than running the full feedback setup blindly.
+Repeated application is supported. Local PostgreSQL tests cover ratings,
+updates, ownership, legacy IDs, comments, replies, reactions and deletion cleanup.
+The patch has not been applied to the live Supabase project by this agent.
 
 ## Interpreting the provided startup logs
 

@@ -98,6 +98,26 @@ test('text tutor IDs scope feedback reads and rating writes without UUID convers
   assert.deepEqual(requests[3].record, { tutor_id: 't10', user_id: 'viewer', rating: 4 });
 });
 
+test('profile Tutor UUID ratings keep the same selected account ID and verified viewer', async () => {
+  const tutorId = 'd96130e6-002a-41b0-a8f2-b0e6c814a98c';
+  const { feedback, requests } = services(request => ({ data: request.record, error: null }));
+  const saved = await feedback.saveTutorRating(tutorId, { id: 'fake-ui-viewer' }, 5);
+  assert.equal(requests[0].table, 'tutor_ratings');
+  assert.deepEqual(requests[0].record, { tutor_id: tutorId, user_id: 'viewer', rating: 5 });
+  assert.equal(saved.tutor_id, tutorId);
+  assert.equal(requests.length, 1);
+});
+
+test('invalid ratings never reach the database for either Tutor source', async () => {
+  const { feedback, requests } = services(() => ({ data: null, error: null }));
+  for (const id of ['t10', 'd96130e6-002a-41b0-a8f2-b0e6c814a98c']) {
+    for (const rating of [0, 6, 4.5, NaN, '5']) {
+      await assert.rejects(feedback.saveTutorRating(id, { id: 'viewer' }, rating), /Choose a rating/);
+    }
+  }
+  assert.equal(requests.length, 0);
+});
+
 test('cancelled tutor loads do not send new requests', async () => {
   const controller = new AbortController();
   controller.abort();

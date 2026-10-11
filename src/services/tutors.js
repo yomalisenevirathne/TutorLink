@@ -4,7 +4,6 @@ export function normalizeFeedbackTutor(tutor) {
   const subjects = Array.isArray(tutor.subjects) ? tutor.subjects : (tutor.subject ? [tutor.subject] : []);
   return {
     id: tutor.id,
-    canReceiveFeedback: tutor.listingId !== null,
     fullName: tutor.name || 'Tutor',
     avatarUrl: tutor.photoUrl || null,
     university: tutor.university || '',

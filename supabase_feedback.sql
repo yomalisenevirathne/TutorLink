@@ -1,5 +1,7 @@
 -- Run in this project's Supabase SQL Editor before using shared feedback.
 -- Feedback uses public.tutors text IDs (for example t10).
+-- Apply supabase_profile_tutor_feedback_fix.sql afterward to support Tutor
+-- accounts listed directly from public.profiles as well.
 -- Existing feedback, tutor profiles, tutors, and payment data are preserved.
 BEGIN;
 

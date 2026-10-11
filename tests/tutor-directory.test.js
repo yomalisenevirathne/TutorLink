@@ -141,7 +141,7 @@ test('a Tutor account without extra details still displays and opens with its co
   assert.deepEqual(detail.subjects, []);
   const feedback = await data.feedbackTutors.fetchTutorById(kasunId);
   assert.equal(feedback.fullName, kasun.full_name);
-  assert.equal(feedback.canReceiveFeedback, false);
+  assert.equal(feedback.id, kasunId);
 });
 
 test('email-linked legacy listings show the same account photo in cards and details', async () => {
