@@ -30,7 +30,7 @@ function PaymentCard({ payment }) {
   const initials = nameParts.slice(0, 2).map((part) => part[0]).join('');
   return (
     <View style={[styles.card, { borderColor: colors.border }, compact && styles.compactCard]}
-      accessibilityLabel={`${payment.name}, ${payment.subject || ''}, ${payment.bookerName ? `Booked by ${payment.bookerName}, ` : ''}${formatPaymentAmount(payment)}, ${formatPaymentDate(payment.occurredAt)}`}>
+      accessibilityLabel={`${payment.name}, ${payment.subject || ''}, ${formatPaymentAmount(payment)}, ${formatPaymentDate(payment.occurredAt)}`}>
       <View style={[styles.avatar, { backgroundColor: colors.background, borderColor: colors.border }, compact && styles.compactAvatar]}>
         {payment.avatarUrl && payment.avatarUrl !== failedImageUrl ? (
           <Image source={{ uri: payment.avatarUrl }} style={styles.avatarImage} resizeMode="cover"
@@ -42,7 +42,6 @@ function PaymentCard({ payment }) {
       <View style={styles.cardDetails}>
         <Text style={styles.name} numberOfLines={2}>{payment.name}</Text>
         {!!payment.subject && <Text style={styles.subject} numberOfLines={2}>{payment.subject}</Text>}
-        {!!payment.bookerName && <Text style={styles.booker} numberOfLines={2}>Booked by: {payment.bookerName}</Text>}
         <Text style={[styles.date, compact && styles.compactDate]}>{formatPaymentDate(payment.occurredAt)}</Text>
       </View>
       <Text style={[styles.amount, { color: colors.text }, compact && styles.compactAmount]}
@@ -290,8 +289,7 @@ const styles = StyleSheet.create({
   avatarImage: { width: '100%', height: '100%' },
   initials: { fontSize: 15, fontWeight: '700', letterSpacing: 0.4 },
   cardDetails: { flex: 1, minWidth: 0 },
-  subject: { fontSize: 12, lineHeight: 17, color: '#6A1B9A', marginTop: 4 },
-  booker: { fontSize: 11, lineHeight: 16, color: '#85788F', marginTop: 4 },
+  subject: { fontSize: 12, lineHeight: 17, color: '#737373', marginTop: 4 },
   name: { fontSize: 16, fontWeight: '700', color: '#292034', marginBottom: 5, letterSpacing: -0.3 },
   date: { fontSize: 11, lineHeight: 16, color: '#85788F' },
   compactDate: { fontSize: 10 },
