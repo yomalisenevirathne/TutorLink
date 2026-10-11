@@ -54,6 +54,8 @@ export async function savePaymentMethod(userId, metadata, { isDemo = false } = {
     || !Number.isInteger(year) || year < 2000 || year > 9999
     || name.length < 2 || name.length > 80) throw new Error('Check the card details and try again.');
 
+  getCardUpdateMetadata({ name, expiry: `${String(month).padStart(2, '0')}/${year}` });
+
   const { client, userId: ownerId } = await getPaymentIdentity(userId, { isDemo, create: true });
 
   // Explicit whitelist: never submit a full number, CVV, client-selected owner or token.

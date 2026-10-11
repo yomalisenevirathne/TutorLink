@@ -185,18 +185,35 @@ test('failed registrations do not create Supabase accounts through demo login', 
   assert.equal((await apiService.register({ email: 'test@example.com', password: 'test-password' })).success, false);
 });
 
-test('combined history includes saved demos without treating them as Paid transactions', async () => {
+test('Paid filter includes saved demo confirmations and preserves their stored status', async () => {
   const demo = { id: 'demo:saved-1', name: 'Test Tutor', amount: 450, currency: 'LKR', status: 'Demo',
     occurredAt: '2026-10-08T10:00:00Z', direction: 'Sent', reference: 'DEMO-TEST-12345' };
   const subject = paymentService({ demoRows: [demo] });
   const history = await subject.getCombinedPaymentHistory(userId);
   assert.equal(history.length, 2);
   assert.equal(history[0].status, 'Demo');
-  assert.equal(formatting.getPaymentSections(history, '', 'Paid')[0].data.length, 1);
+  assert.deepEqual(formatting.getPaymentSections(history, '', 'Paid').flatMap(section => section.data.map(payment => payment.id)),
+    ['demo:saved-1', 'payment-1']);
+  assert.equal(formatting.getPaymentSections(history, 'paid', 'Paid').flatMap(section => section.data).length, 2);
+  assert.equal(formatting.getPaymentSections(history, 'DEMO-TEST', 'Paid')[0].data[0].id, demo.id);
   assert.equal(formatting.getPaymentSections(history, 'DEMO-TEST', 'Demo')[0].data[0].amount, 450);
   const anonymous = paymentService({ authenticatedId: null, demoRows: [demo] });
   assert.deepEqual(await anonymous.getCombinedPaymentHistory('demo_fake', { isDemo: true }), [demo]);
   assert.equal(anonymous.requests.length, 0);
+});
+
+test('Paid filter includes demo-only history and keeps Pending and Refunded filters separate', () => {
+  const demo = { ...formatting.mapPaymentRecord(row), id: 'demo:saved', status: 'Demo', bookerName: 'Nethmi',
+    subject: 'Database Systems', bookingId: 'booking-1', occurredAt: '2026-10-11T09:55:00Z' };
+  const records = [demo, formatting.mapPaymentRecord({ ...row, id: 'pending', status: 'Pending' }),
+    formatting.mapPaymentRecord({ ...row, id: 'refunded', status: 'Refunded' })];
+  assert.equal(formatting.getPaymentSections([demo], '', 'Paid')[0].data[0].id, demo.id);
+  assert.equal(formatting.getPaymentSections(records, 'nethmi', 'Paid')[0].data[0].id, demo.id);
+  assert.equal(formatting.getPaymentSections(records, 'database systems', 'Paid')[0].data[0].id, demo.id);
+  assert.equal(formatting.getPaymentSections(records, '', 'Pending')[0].data[0].id, 'pending');
+  assert.equal(formatting.getPaymentSections(records, '', 'Refunded')[0].data[0].id, 'refunded');
+  assert.equal(formatting.getPaymentSections(records, 'missing', 'Paid').length, 0);
+  assert.equal(records[0].status, 'Demo');
 });
 
 test('login prefers the incoming branch database profile over conflicting auth metadata', async () => {

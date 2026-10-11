@@ -127,6 +127,16 @@ test('saving cannot write without a real matching authenticated identity', async
   }
 });
 
+test('expired cards are rejected before any database insert', async () => {
+  const service = cardService();
+  const today = new Date();
+  const expired = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  await assert.rejects(service.savePaymentMethod(userId, {
+    ...metadata, exp_month: expired.getMonth() + 1, exp_year: expired.getFullYear(),
+  }), /expired/);
+  assert.equal(service.requests.length, 0);
+});
+
 test('a rejected insert or unconfirmed database response never reports a saved card', async () => {
   await assert.rejects(cardService({ error: { code: '42501' } }).savePaymentMethod(userId, metadata), /couldn't save/);
   await assert.rejects(cardService({ error: { code: 'PGRST205' } }).savePaymentMethod(userId, metadata), { code: 'CARD_STORAGE_UNAVAILABLE' });

@@ -5,7 +5,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { formatCardExpiry, formatCardNumber, getCardMetadata } from '../data/cardForm';
 import { savePaymentMethod } from '../services/paymentMethods';
 
-const emptyForm = { number: '', expiry: '', cvv: '', name: '', saveForFuture: false };
+const emptyForm = { number: '', brand: 'Visa', expiry: '', cvv: '', name: '', saveForFuture: false };
 
 export default function AddCardScreen({ userId, isDemo, onBack, onSaved, backLabel = 'Back to payment' }) {
   const [form, setForm] = useState(emptyForm);
@@ -45,13 +45,23 @@ export default function AddCardScreen({ userId, isDemo, onBack, onSaved, backLab
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Text style={styles.label}>Card number</Text>
           <TextInput style={styles.input} accessibilityLabel="Card number" placeholder="••••  ••••  ••••  ••••"
-            placeholderTextColor="#A4A4A4" keyboardType="number-pad" maxLength={23}
+            placeholderTextColor="#A4A4A4" keyboardType="number-pad" maxLength={19}
             autoComplete="off" value={form.number} editable={!busy}
             onChangeText={(value) => update('number', formatCardNumber(value))} />
-          <View style={styles.brands} accessibilityLabel="Visa, Mastercard and American Express accepted">
-            <View style={styles.visa}><Text style={styles.visaText}>VISA</Text></View>
-            <View style={styles.mastercard}><View style={styles.mastercardSymbols}><View style={styles.redCircle} /><View style={styles.orangeCircle} /></View><Text style={styles.mastercardText}>mastercard.</Text></View>
-            <View style={styles.amex}><Text style={styles.amexText}>AMERICAN{ '\n' }EXPRESS</Text></View>
+          <Text style={styles.fieldHint}>Enter 16 digits and choose your card type.</Text>
+          <View style={styles.brands} accessibilityLabel="Choose your card type">
+            <TouchableOpacity style={[styles.brandOption, form.brand === 'Visa' && styles.selectedBrand]} disabled={busy}
+              onPress={() => update('brand', 'Visa')} accessibilityRole="radio" accessibilityLabel="Visa" accessibilityState={{ selected: form.brand === 'Visa', disabled: busy }}>
+              <View style={styles.visa}><Text style={styles.visaText}>VISA</Text></View>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.brandOption, form.brand === 'Mastercard' && styles.selectedBrand]} disabled={busy}
+              onPress={() => update('brand', 'Mastercard')} accessibilityRole="radio" accessibilityLabel="Mastercard" accessibilityState={{ selected: form.brand === 'Mastercard', disabled: busy }}>
+              <View style={styles.mastercard}><View style={styles.mastercardSymbols}><View style={styles.redCircle} /><View style={styles.orangeCircle} /></View><Text style={styles.mastercardText}>mastercard.</Text></View>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.brandOption, form.brand === 'American Express' && styles.selectedBrand]} disabled={busy}
+              onPress={() => update('brand', 'American Express')} accessibilityRole="radio" accessibilityLabel="American Express" accessibilityState={{ selected: form.brand === 'American Express', disabled: busy }}>
+              <View style={styles.amex}><Text style={styles.amexText}>AMERICAN{ '\n' }EXPRESS</Text></View>
+            </TouchableOpacity>
           </View>
           <View style={styles.fieldsRow}>
             <View style={styles.expiryField}><Text style={styles.label}>Expiry date</Text>
@@ -100,6 +110,9 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', color: '#111111', marginBottom: 6 },
   input: { borderWidth: 1, borderColor: '#4C4C4C', borderRadius: 3, height: 44, paddingHorizontal: 20, fontSize: 15, color: '#111111', backgroundColor: '#FFFFFF' },
   brands: { flexDirection: 'row', alignItems: 'center', gap: 15, marginTop: 9, marginBottom: 18 },
+  fieldHint: { fontSize: 11, color: '#89818D', marginTop: 6 },
+  brandOption: { minWidth: 58, minHeight: 44, padding: 6, borderWidth: 1, borderColor: '#E8E0EF', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  selectedBrand: { borderColor: '#6A1B9A', backgroundColor: '#F7F0FC' },
   visa: { backgroundColor: '#1465CA', borderRadius: 3, padding: 5 },
   visaText: { color: '#FFFFFF', fontSize: 17, fontStyle: 'italic', fontWeight: '800' },
   mastercard: { alignItems: 'center' },

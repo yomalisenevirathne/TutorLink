@@ -54,8 +54,10 @@ export function getPaymentSections(payments, search = '', status = 'All') {
 
   [...payments]
     .filter((payment) => {
-      const matchesSearch = `${payment.name} ${payment.bookerName || ''} ${formatPaymentAmount(payment)} ${formatPaymentDate(payment.occurredAt)} ${payment.status} ${payment.reference || ''} ${payment.subject || ''} ${payment.cardLast4 || ''}`.toLowerCase().includes(query);
-      return matchesSearch && (status === 'All' || payment.status === status);
+      // Completed prototype confirmations belong in the Paid filter while retaining their Demo status.
+      const filterStatus = payment.status === 'Demo' ? 'Paid' : payment.status;
+      const matchesSearch = `${payment.name} ${payment.bookerName || ''} ${formatPaymentAmount(payment)} ${formatPaymentDate(payment.occurredAt)} ${payment.status} ${filterStatus} ${payment.reference || ''} ${payment.subject || ''} ${payment.cardLast4 || ''}`.toLowerCase().includes(query);
+      return matchesSearch && (status === 'All' || payment.status === status || filterStatus === status);
     })
     .sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt))
     .forEach((payment) => {
