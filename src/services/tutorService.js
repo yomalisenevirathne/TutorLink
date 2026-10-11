@@ -12,24 +12,23 @@ const toTutor = (row) => ({
   yearOfStudy: row.year_of_study ?? row.yearOfStudy ?? 1,
 });
 
-const isUuid = (value) => typeof value === 'string'
-  && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+const isUuid = (value) =>
+  typeof value === 'string' &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
-const toRow = (tutor) => ({
-  user_id: isUuid(tutor.userId ?? tutor.user_id) ? (tutor.userId ?? tutor.user_id) : null,
-  name: tutor.name,
+// Upeksha ගේ tutors table එකට ගැලපෙන safe row එක (user_id නැතුව)
+const toTutorSearchRow = (tutor) => ({
+  name: tutor.name || tutor.fullName || 'Tutor',
   email: tutor.email ?? null,
-  phone: tutor.phone ?? null,
-  university: tutor.university ?? null,
-  year_of_study: tutor.yearOfStudy ?? tutor.year_of_study ?? null,
+  phone: tutor.phone ?? tutor.phoneNumber ?? null,
+  university: tutor.university ?? 'SLIIT',
+  year_of_study: tutor.yearOfStudy ?? tutor.year_of_study ?? 4,
   photo_url: tutor.photoUrl ?? tutor.photo_url ?? null,
-  bio: tutor.bio ?? null,
+  photoUrl: tutor.photoUrl ?? tutor.photo_url ?? null,
+  bio: tutor.bio ?? tutor.aboutYou ?? null,
   subjects: Array.isArray(tutor.subjects) ? tutor.subjects : [],
-  hourly_rate: Number(tutor.hourlyRate ?? tutor.hourly_rate ?? 0),
-  session_modes: Array.isArray(tutor.modesOffered)
-    ? tutor.modesOffered
-    : (Array.isArray(tutor.session_modes) ? tutor.session_modes : []),
-  experience_level: tutor.experienceLevel ?? tutor.experience_level ?? null,
+  hourly_rate: Number(tutor.hourlyRate ?? tutor.hourly_rate ?? 700),
+  experience_level: tutor.experienceLevel ?? tutor.experience_level ?? 'Senior Tutor',
   verified_status: tutor.verifiedStatus ?? tutor.verified_status ?? 'unverified',
 });
 
@@ -41,35 +40,91 @@ const assertNoError = (error, operation) => {
 
 export const tutorService = {
   async list() {
-    const { data, error } = await supabase.from('tutors').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('tutors')
+      .select('*')
+      .order('name', { ascending: true });
     assertNoError(error, 'load');
     return (data || []).map(toTutor);
   },
 
   async getById(id) {
     if (!id) throw new Error('A tutor id is required.');
-    const { data, error } = await supabase.from('tutors').select('*').eq('id', id).single();
-    assertNoError(error, 'load');
-    return toTutor(data);
+    const { data, error } = await supabase.from('tutors').select('*').eq('id', id).maybeSingle();
+    if (data) return toTutor(data);
+
+    // If not found in tutors table, check tutor_profiles
+    if (isUuid(id)) {
+      const { data: profData } = await supabase
+        .from('tutor_profiles')
+        .select('*')
+        .eq('user_id', id)
+        .maybeSingle();
+      if (profData) return toTutor(profData);
+    }
+    return null;
   },
 
   async getByEmail(email) {
     if (!email) throw new Error('A tutor email is required.');
-    const { data, error } = await supabase.from('tutors').select('*').eq('email', email).maybeSingle();
-    assertNoError(error, 'load');
-    return data ? toTutor(data) : null;
+    try {
+      const { data, error } = await supabase
+        .from('tutors')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
+      if (data) return toTutor(data);
+    } catch (e) {
+      // ignore
+    }
+    return null;
   },
 
+  // 💡 CREATE TUTOR: Saves to Rashmika's tutor_profiles AND Upeksha's tutors table
   async create(tutor) {
-    if (!tutor?.name?.trim()) throw new Error('Tutor name is required.');
-    const { data, error } = await supabase.from('tutors').insert(toRow(tutor)).select('*').single();
+    const tutorName = tutor?.name || tutor?.fullName;
+    if (!tutorName?.trim()) throw new Error('Tutor name is required.');
+
+    const rawUserId = tutor.userId ?? tutor.user_id;
+    const validUserId = isUuid(rawUserId) ? rawUserId : null;
+
+    // 1. Rashmika ගේ tutor_profiles table එකට data save කිරීම
+    if (validUserId) {
+      try {
+        await supabase.from('tutor_profiles').upsert({
+          user_id: validUserId,
+          subjects: Array.isArray(tutor.subjects) ? tutor.subjects : [],
+          experience_level: tutor.experienceLevel ?? tutor.experience_level ?? 'Senior Tutor (4+ years)',
+          hourly_rate: Number(tutor.hourlyRate ?? tutor.hourly_rate ?? 25.0),
+          is_verified_tutor: false,
+        });
+        console.log('[TutorService] Saved to tutor_profiles successfully!');
+      } catch (err) {
+        console.log('[TutorService] Notice on tutor_profiles upsert:', err.message);
+      }
+    }
+
+    // 2. Upeksha ගේ tutors table එකට data save කිරීම (user_id නැතුව safe payload එකක් යැවීම)
+    const searchPayload = toTutorSearchRow(tutor);
+    const { data, error } = await supabase
+      .from('tutors')
+      .insert([searchPayload])
+      .select('*')
+      .single();
+
     assertNoError(error, 'create');
     return toTutor(data);
   },
 
   async update(id, changes) {
     if (!id) throw new Error('A tutor id is required.');
-    const { data, error } = await supabase.from('tutors').update(toRow(changes)).eq('id', id).select('*').single();
+    const searchPayload = toTutorSearchRow(changes);
+    const { data, error } = await supabase
+      .from('tutors')
+      .update(searchPayload)
+      .eq('id', id)
+      .select('*')
+      .single();
     assertNoError(error, 'update');
     return toTutor(data);
   },
