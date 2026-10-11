@@ -150,7 +150,7 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
     return () => {
       isMounted = false;
     };
-  }, [selectedTutor, selectedDay]);
+  }, [selectedTutor, selectedDay, selectedDayObj.fullDate]);
 
   const handleOpenCourseModal = () => {
     setEditCourseTitle(courseTitle);

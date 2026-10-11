@@ -4,7 +4,6 @@ import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, V
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, shadow } from '../../../constants/colors';
 import { tutorService } from '../../../services/tutorService';
-import { supabase } from '../../../utils/supabase';
 import useTutorRatingSummaries from '../../../hooks/useTutorRatingSummaries';
 import { withFeedbackRatings } from '../../../data/tutorFeedbackSearch';
 import { FilterPill } from '../components/FilterPill';

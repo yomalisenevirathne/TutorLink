@@ -58,16 +58,8 @@ export default function SessionPreferencesScreen({
 
     loadLiveCapacity();
 
-    // Re-fetch automatically when screen regains focus (e.g. returning after cancellation)
-    const unsubscribe = navigation?.addListener
-      ? navigation.addListener('focus', loadLiveCapacity)
-      : null;
-
     return () => {
       isMounted = false;
-      if (unsubscribe && typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
     };
   }, [year, month, date, slot, rescheduleId]);
 

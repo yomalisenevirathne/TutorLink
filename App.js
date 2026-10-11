@@ -32,11 +32,12 @@ import SessionPreferencesScreen from './src/screens/SessionPreferencesScreen';
 import BookingSummaryScreen from './src/screens/BookingSummaryScreen';
 import MyBookingsScreen from './src/screens/MyBookingsScreen';
 import ManageSessionScreen from './src/screens/ManageSessionScreen';
+import BookingSuccessScreen from './src/screens/BookingSuccessScreen';
 // `screen` is reserved by Expo Router/React Navigation; use `page` for our route.
 const screenPath = (screen) => ({ pathname: '/[page]', params: { page: screen } });
 const searchScreens = ['SearchHomeScreen', 'SearchScreen', 'ResultsScreen', 'CompareScreen', 'FavoritesScreen', 'SearchTutorProfileScreen'];
 const publicScreens = ['loading', 'login', 'selection', 'tutorReg', 'studentReg', 'verifyOtp', ...searchScreens];
-const bookingScreens = ['ScheduleScreen', 'SessionPreferencesScreen', 'BookingSummaryScreen', 'MyBookingsScreen', 'ManageSessionScreen'];
+const bookingScreens = ['ScheduleScreen', 'SessionPreferencesScreen', 'BookingSummaryScreen', 'BookingSuccessScreen', 'MyBookingsScreen', 'ManageSessionScreen'];
 const allScreens = [...publicScreens, ...bookingScreens, 'studentProfile', 'tutorProfile', 'testingfeedback', 'feedbackComments', 'paymentHistory', 'payment', 'addCard', 'editCard', 'paymentProcessing', 'paymentSuccess', 'managePayments'];
 
 
@@ -47,15 +48,6 @@ import { ResultsScreen } from './src/features/search/screens/ResultsScreen';
 import { CompareScreen } from './src/features/search/screens/CompareScreen';
 import { FavoritesScreen } from './src/features/search/screens/FavoritesScreen';
 import { TutorProfileScreen as SearchTutorProfileScreen } from './src/features/search/screens/TutorProfileScreen';
-
-// --- Yomali's Booking & Session Screens ---
-import ScheduleScreen from './src/screens/ScheduleScreen';
-import SessionPreferencesScreen from './src/screens/SessionPreferencesScreen';
-import BookingSummaryScreen from './src/screens/BookingSummaryScreen';
-import BookingSuccessScreen from './src/screens/BookingSuccessScreen';
-import MyBookingsScreen from './src/screens/MyBookingsScreen';
-import ManageSessionScreen from './src/screens/ManageSessionScreen';
-import { fetchAllBookings } from './src/bookingService';
 
 export default function App() {
   const { page = 'SearchHomeScreen', tutorId } = useLocalSearchParams();
@@ -119,7 +111,27 @@ export default function App() {
       const target = screenName === 'Bookings' || (screenName === 'ScheduleScreen' && isTutorUser && !params.preview)
         ? (isTutorUser ? 'ManageSessionScreen' : 'ScheduleScreen') : screenName;
       if (!allScreens.includes(target)) return;
-      setCurrentBooking((previous) => ({ ...previous, ...params }));
+      setCurrentBooking((previous) => {
+        const tutorData = params.tutor || (params.tutorName ? {
+          id: params.tutorId || previous.tutor?.id,
+          name: params.tutorName,
+          subject: params.subject || previous.tutor?.subject,
+          role: params.role || previous.tutor?.role || 'University Tutor',
+          university: params.university || previous.tutor?.university || 'University',
+          rating: params.rating ?? previous.tutor?.rating ?? '4.8',
+          hourlyRate: params.hourlyRate ?? params.fee ?? previous.tutor?.hourlyRate ?? 700,
+          fee: params.fee ?? params.hourlyRate ?? previous.tutor?.fee ?? 700,
+          photoUrl: params.photoUrl || previous.tutor?.photoUrl,
+        } : previous.tutor);
+        return {
+          ...previous,
+          ...params,
+          tutor_name: params.tutorName || params.tutor_name || tutorData?.name || previous.tutor_name,
+          tutorName: params.tutorName || params.tutor_name || tutorData?.name || previous.tutorName,
+          subject: params.subject || tutorData?.subject || previous.subject,
+          tutor: tutorData ? { ...previous.tutor, ...tutorData } : previous.tutor,
+        };
+      });
       router.navigate(screenPath(target));
     },
     goBack: () => {
@@ -301,6 +313,10 @@ export default function App() {
             onCompleteBooking={handleCompleteBooking}
             onDeleteBooking={handleDeleteBooking}
           />
+        )}
+
+        {currentScreen === 'BookingSuccessScreen' && (
+          <BookingSuccessScreen navigation={navigation} route={{ params: currentBooking }} />
         )}
 
         {/* ================= 3. SEARCH FLOW ================= */}

@@ -11,7 +11,7 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
   const [subjects, setSubjects] = useState(Array.isArray(user?.subjects) ? user.subjects.join(', ') : '');
   const [experienceLevel, setExperienceLevel] = useState(user?.experienceLevel || 'Senior Tutor (4+ years)');
   const [aboutYou, setAboutYou] = useState(user?.aboutYou || '');
-  const [password, setPassword] = useState('password123');
+  const password = 'password123';
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || null);
   const [certificateDocument, setCertificateDocument] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -79,7 +79,7 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
 
       if (res && res.success) {
         const tutorPayload = {
-          userId: user?.id,
+          userId: res.user?.id || user?.id,
           name: fullName,
           email,
           phone: phoneNumber,
@@ -94,7 +94,7 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
         const tutor = existingTutor
           ? await tutorService.update(existingTutor.id, tutorPayload)
           : await tutorService.create(tutorPayload);
-        Alert.alert('Welcome!', 'Tutor account created successfully.');
+        Alert.alert(user ? 'Profile Updated' : 'Welcome!', user ? 'Your profile has been saved.' : 'Tutor account created successfully.');
         if (onRegistrationSuccess) {
           onRegistrationSuccess({ ...(res.user || user), tutorId: tutor.id });
         }

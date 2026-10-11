@@ -217,11 +217,6 @@ export default function ScheduleScreen({
       return;
     }
 
-    if (checkSlotStatus(selectedSlot).isBooked) {
-      Alert.alert('Slot Unavailable', 'Please select an available time slot.');
-      return;
-    }
-
     navigation?.navigate('SessionPreferencesScreen', {
       year: currentYear,
       month: currentMonth,

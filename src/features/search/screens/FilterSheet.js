@@ -25,7 +25,11 @@ const MODES = ['online', 'physical', 'hybrid'];
 
 export function FilterSheet({ initialSection, onClose, feedbackTutors, feedbackReady = true }) {
     const insets = useSafeAreaInsets();
-    const { filters, setFilters, query } = useDiscovery();
+    const {
+        filters, setFilters, query, filterPresets, saveFilterPreset,
+        updateFilterPreset, deleteFilterPreset,
+    } = useDiscovery();
+    const [presetName, setPresetName] = useState('');
     const [draft, setDraft] = useState(filters || DEFAULT_FILTERS);
     const [atBottom, setAtBottom] = useState(false);
     const [fetchedPreviewCount, setPreviewCount] = useState(0);

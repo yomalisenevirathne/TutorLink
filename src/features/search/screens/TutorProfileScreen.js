@@ -4,7 +4,6 @@ import { router } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, shadow } from '../../../constants/colors';
-import { supabase } from '../../../utils/supabase';
 import { tutorService } from '../../../services/tutorService';
 import { Avatar } from '../components/Avatar';
 import { Chip } from '../components/Chip';

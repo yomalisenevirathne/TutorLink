@@ -50,7 +50,7 @@ export const tutorService = {
 
   async getById(id) {
     if (!id) throw new Error('A tutor id is required.');
-    const { data, error } = await supabase.from('tutors').select('*').eq('id', id).maybeSingle();
+    const { data } = await supabase.from('tutors').select('*').eq('id', id).maybeSingle();
     if (data) return toTutor(data);
 
     // If not found in tutors table, check tutor_profiles
@@ -68,13 +68,13 @@ export const tutorService = {
   async getByEmail(email) {
     if (!email) throw new Error('A tutor email is required.');
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('tutors')
         .select('*')
         .eq('email', email)
         .maybeSingle();
       if (data) return toTutor(data);
-    } catch (e) {
+    } catch {
       // ignore
     }
     return null;

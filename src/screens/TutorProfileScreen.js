@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Image, TouchableOpacity, Switch, ScrollView, Al
 import { pickQualificationDocument } from '../utils/mediaPicker';
 import { tutorService } from '../services/tutorService';
 
-export default function TutorProfileScreen({ user, onEditProfile, onCreateSession, onNavigateToBookings, onLogout, onDeleteProfile, navigation }) {
+export default function TutorProfileScreen({ user, onEditProfile, onCreateSession, onNavigateToBookings, onLogout, onDeleteProfile, onNavigateToPayments, navigation }) {
   const [notifications, setNotifications] = useState(user?.preferences?.notifications ?? true);
   const [privacy, setPrivacy] = useState(user?.preferences?.privacy ?? false);
 
