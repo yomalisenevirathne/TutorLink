@@ -1,8 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Image, Modal } from 'react-native';
 import { apiService } from '../services/api';
 import { tutorService } from '../services/tutorService';
 import { pickImageWithPermissions, pickQualificationDocument } from '../utils/mediaPicker';
+import EmailVerificationScreen from './EmailVerificationScreen';
 
 export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, onRegistrationSuccess, onBack }) {
   const [fullName, setFullName] = useState(user?.fullName || '');
@@ -15,7 +16,15 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || null);
   const [certificateDocument, setCertificateDocument] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [verification, setVerification] = useState(null);
+  const [verifiedDemoEmail, setVerifiedDemoEmail] = useState('');
+  const [feedback, setFeedback] = useState('');
   const saving = useRef(false);
+  const requestingCode = useRef(false);
+  const showFeedback = (title, message) => {
+    setFeedback(message);
+    Alert.alert(title, message);
+  };
 
   const handlePickPhoto = async () => {
     const uri = await pickImageWithPermissions();
@@ -25,15 +34,16 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
   };
 
   const handleVerifyEmailClick = async () => {
-    if (!email) {
-      Alert.alert('Email Required', 'Please enter your email address first.');
-      return;
-    }
+    if (requestingCode.current || saving.current) return;
+    requestingCode.current = true;
     try {
-      const res = await apiService.sendOtp(email);
+      const address = email.trim().toLowerCase();
+      const res = await apiService.sendOtp(address, { demo: !user });
       if (!res?.success) throw new Error(res?.message || 'Unable to send the verification code.');
-      onNavigateToVerifyOtp?.(email, res.otp);
-    } catch (error) { Alert.alert('Verification Failed', error.message); }
+      if (!user) setVerification({ email: address, otp: res.otp });
+      else onNavigateToVerifyOtp?.(address, res.otp);
+    } catch (error) { showFeedback('Verification Failed', error.message); }
+    finally { requestingCode.current = false; }
   };
 
   const handleUploadCertificate = async () => {
@@ -46,8 +56,13 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
 
   const handleRegister = async () => {
     if (saving.current) return;
-    if (!fullName || !email) {
-      Alert.alert('Missing Fields', 'Please provide at least your Full Name and Email Address.');
+    if (!fullName.trim() || !email.trim()) {
+      showFeedback('Missing Fields', 'Please provide at least your Full Name and Email Address.');
+      return;
+    }
+    const address = email.trim().toLowerCase();
+    if (!user && verifiedDemoEmail !== address) {
+      showFeedback('Verify Demo Code', 'Tap verify email and enter demo OTP 123456 first. Any email address format is accepted; an existing mailbox is not required.');
       return;
     }
 
@@ -56,8 +71,9 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
     try {
       const payload = {
         role: 'Tutor',
-        fullName,
-        email,
+        fullName: fullName.trim(),
+        email: address,
+        ...(!user ? { demoOtp: true } : {}),
         phoneNumber,
         subjects: subjects ? subjects.split(',').map(s => s.trim()) : ['Mathematics', 'Physics'],
         experienceLevel,
@@ -79,6 +95,13 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
             setCertificateDocument(null);
           } else attachmentWarning = uploaded.message || 'The qualification document could not be saved.';
         }
+        // New accounts already have profiles + tutor_profiles. The shared
+        // directory displays them without copying them into the legacy tutors table.
+        if (!user) {
+          onRegistrationSuccess?.({ ...res.user, tutorId: res.user.id });
+          if (attachmentWarning) Alert.alert('Document Upload Failed', attachmentWarning);
+          return;
+        }
         const tutorPayload = {
           userId: res.user?.id || user?.id,
           name: fullName,
@@ -89,10 +112,10 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
           experienceLevel,
           bio: aboutYou,
         };
-        const existingTutor = user?.tutorId
-          ? await tutorService.getById(user.tutorId)
-          : await tutorService.getByEmail(email);
-        const tutor = existingTutor
+        const existingTutor = await tutorService.getById(user.tutorId || res.user.id);
+        const tutor = existingTutor?.listingId === null
+          ? existingTutor
+          : existingTutor
           ? await tutorService.update(existingTutor.id, tutorPayload)
           : await tutorService.create(tutorPayload);
         Alert.alert(user ? 'Profile Updated' : 'Welcome!', attachmentWarning
@@ -102,10 +125,10 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
           onRegistrationSuccess({ ...(res.user || user), tutorId: tutor.id });
         }
       } else {
-        Alert.alert('Registration Failed', res?.message || 'Error creating account');
+        showFeedback('Registration Failed', res?.message || 'Error creating account');
       }
     } catch (err) {
-      Alert.alert('Error', err.message);
+      showFeedback('Error', err.message);
     } finally {
       saving.current = false;
       setLoading(false);
@@ -113,6 +136,19 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
   };
 
   return (
+    <>
+    <Modal visible={Boolean(verification)} animationType="slide" onRequestClose={() => setVerification(null)}>
+      {verification && <EmailVerificationScreen
+        email={verification.email}
+        demoOtp={verification.otp}
+        onBack={() => setVerification(null)}
+        onVerificationSuccess={() => {
+          setVerifiedDemoEmail(verification.email);
+          setVerification(null);
+          setFeedback('Demo code verified. You can now create your tutor account.');
+        }}
+      />}
+    </Modal>
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       {/* Brand Header */}
       <View style={styles.logoContainer}>
@@ -172,6 +208,7 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
               <Text style={styles.verifyEmailBtnText}>verify email</Text>
             </TouchableOpacity>
           </View>
+          {!user && <Text style={styles.certDescription}>Demo OTP: 123456. Any email address is allowed; no email is sent.</Text>}
         </View>
 
         <View style={styles.inputGroup}>
@@ -244,6 +281,7 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
       </View>
 
       {/* Create Account Button */}
+      {!!feedback && <Text style={styles.certDescription} accessibilityLiveRegion="polite">{feedback}</Text>}
       <TouchableOpacity 
         style={[styles.createAccountBtn, loading && styles.disabledBtn]} 
         onPress={handleRegister}
@@ -252,6 +290,7 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
         <Text style={styles.createAccountBtnText}>{loading ? 'Saving...' : user ? 'Save Profile' : 'Create Account'}</Text>
       </TouchableOpacity>
     </ScrollView>
+    </>
   );
 }
 

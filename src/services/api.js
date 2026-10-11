@@ -109,9 +109,15 @@ export const apiService = {
     }
   },
 
-  sendOtp: async (email) => {
+  sendOtp: async (email, { demo = false } = {}) => {
     const address = String(email || '').trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) return { success: false, message: 'Enter a valid email address.' };
+    // Tutor registration demos do not send mail or create a passwordless session.
+    if (demo) {
+      otpProviders.set(address, 'tutor-demo');
+      mockState.mockOtps[address] = { code: '123456', expiresAt: Date.now() + 10 * 60 * 1000 };
+      return { success: true, message: 'Use demo code 123456. No email is sent.', otp: '123456' };
+    }
     try {
       const { error } = await supabase.auth.signInWithOtp({ email: address });
       if (!error) {
@@ -132,7 +138,7 @@ export const apiService = {
     const code = String(otp || '').trim();
     if (!/^\d{6}$/.test(code)) return { success: false, message: 'Enter all six digits.' };
     const provider = otpProviders.get(address);
-    if (provider === 'demo' && allowDemoAuth) {
+    if (provider === 'tutor-demo' || (provider === 'demo' && allowDemoAuth)) {
       const expected = mockState.mockOtps[address];
       if (!expected || Date.now() > expected.expiresAt || code !== expected.code)
         return { success: false, message: 'Invalid or expired code. Request a new code.' };
@@ -146,8 +152,9 @@ export const apiService = {
       }
     } else return { success: false, message: 'Request a new verification code first.' };
     otpProviders.delete(address);
-    if (mockState.currentUser?.email?.toLowerCase() === address) mockState.currentUser.isEmailVerified = true;
-    return { success: true, message: 'Email verified successfully.' };
+    if (provider === 'supabase' && mockState.currentUser?.email?.toLowerCase() === address)
+      mockState.currentUser.isEmailVerified = true;
+    return { success: true, message: provider === 'supabase' ? 'Email verified successfully.' : 'Demo code verified.' };
   },
 
   // Return the Supabase identity/session used by protected database queries.
@@ -175,6 +182,10 @@ export const apiService = {
 
       if (!data?.user) {
         return { success: false, message: 'Supabase did not return the new user.' };
+      }
+
+      if (registrationData.role === 'Tutor' && registrationData.demoOtp && !data.session?.access_token) {
+        return { success: false, message: 'Supabase requires email confirmation. For demo registration, turn off Confirm email in Supabase Authentication > Sign In / Providers > Email, save, then try again. Demo OTP 123456 cannot confirm a Supabase account.' };
       }
 
       const userId = data.user.id;

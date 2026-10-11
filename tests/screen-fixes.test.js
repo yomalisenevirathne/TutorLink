@@ -154,6 +154,92 @@ test('a failed OTP resend displays an error and releases the loading state', asy
   assert.equal(action(view.render(props), "Didn't receive code? Resend OTP").disabled, false);
 });
 
+test('demo OTP screen resends locally and shows failures on web', async () => {
+  const view = screen('src/screens/EmailVerificationScreen.js', {
+    '../services/api': { apiService: {
+      sendOtp: async (email, options) => {
+        assert.equal(email, 'fake@gmail.com');
+        assert.deepEqual(options, { demo: true });
+        return { success: true, otp: '123456' };
+      },
+      verifyOtp: async () => ({ success: false, message: 'Invalid demo code' }),
+    } },
+  });
+  const props = { email: 'fake@gmail.com', demoOtp: '123456' };
+  assert.match(text(view.render(props)), /No email is sent/);
+  await action(view.render(props), "Didn't receive code? Resend OTP").onPress();
+  const tree = view.render(props);
+  nodes(tree).find((node) => node.type === 'TextInput').props.onChangeText('654321');
+  await action(view.render(props), 'Verify E-Mail').onPress();
+  assert.match(text(view.render(props)), /Invalid demo code/);
+});
+
+test('tutor demo verification preserves form data, resets for another email and saves the profile UUID', async () => {
+  const requests = [];
+  let saved;
+  const view = screen('src/screens/TutorRegistrationScreen.js', {
+    '../services/api': { apiService: {
+      sendOtp: async (email, options) => {
+        assert.deepEqual(options, { demo: true });
+        return { success: true, otp: '123456' };
+      },
+      register: async (payload) => {
+        requests.push(payload);
+        return { success: true, user: { id: 'real-profile-uuid', fullName: payload.fullName, role: 'Tutor' } };
+      },
+    } },
+    '../services/tutorService': { tutorService: new Proxy({}, { get() { throw new Error('New tutor must not be copied into a legacy listing'); } }) },
+    '../utils/mediaPicker': {},
+    './EmailVerificationScreen': { __esModule: true, default: 'EmailVerificationScreen' },
+  });
+  const props = { onRegistrationSuccess: (user) => { saved = user; } };
+  const input = (placeholder) => nodes(view.render(props)).find((node) => node.type === 'TextInput' && node.props.placeholder === placeholder);
+  input('e.g. John Doe').props.onChangeText('Demo Tutor');
+  input('john@example.com').props.onChangeText('  Fake@gmail.com  ');
+  input('e.g. Mathematics, Physics').props.onChangeText('Physics');
+  await action(view.render(props), 'Create Account').onPress();
+  assert.equal(requests.length, 0);
+  await action(view.render(props), 'verify email').onPress();
+  const verification = nodes(view.render(props)).find((node) => node.type === 'EmailVerificationScreen');
+  assert.equal(verification.props.email, 'fake@gmail.com');
+  assert.equal(verification.props.demoOtp, '123456');
+  verification.props.onVerificationSuccess();
+  assert.equal(input('e.g. John Doe').props.value, 'Demo Tutor');
+  assert.equal(input('e.g. Mathematics, Physics').props.value, 'Physics');
+  input('john@example.com').props.onChangeText('another@gmail.com');
+  await action(view.render(props), 'Create Account').onPress();
+  assert.equal(requests.length, 0);
+  input('john@example.com').props.onChangeText('fake@gmail.com');
+  await action(view.render(props), 'Create Account').onPress();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].demoOtp, true);
+  assert.equal(requests[0].email, 'fake@gmail.com');
+  assert.deepEqual(requests[0].subjects, ['Physics']);
+  assert.equal(saved.tutorId, 'real-profile-uuid');
+});
+
+test('tutor registration displays Supabase configuration errors without navigating to success', async () => {
+  let saved = false;
+  const view = screen('src/screens/TutorRegistrationScreen.js', {
+    '../services/api': { apiService: {
+      sendOtp: async () => ({ success: true, otp: '123456' }),
+      register: async () => ({ success: false, message: 'Turn off Confirm email in Supabase' }),
+    } },
+    '../services/tutorService': { tutorService: {} }, '../utils/mediaPicker': {},
+    './EmailVerificationScreen': { __esModule: true, default: 'EmailVerificationScreen' },
+  });
+  const props = { onRegistrationSuccess: () => { saved = true; } };
+  const inputs = nodes(view.render(props)).filter((node) => node.type === 'TextInput');
+  inputs[0].props.onChangeText('Demo Tutor');
+  inputs[1].props.onChangeText('fake@gmail.com');
+  await action(view.render(props), 'verify email').onPress();
+  nodes(view.render(props)).find((node) => node.type === 'EmailVerificationScreen').props.onVerificationSuccess();
+  await action(view.render(props), 'Create Account').onPress();
+  assert.equal(saved, false);
+  assert.match(text(view.render(props)), /Turn off Confirm email/);
+  assert.equal(action(view.render(props), 'Create Account').disabled, false);
+});
+
 test('invalid booking fees never open payment or report booking success', () => {
   let opened = false;
   const view = screen('src/screens/BookingSummaryScreen.js');

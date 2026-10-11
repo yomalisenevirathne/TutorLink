@@ -6,8 +6,13 @@ export default function EmailVerificationScreen({ email = '', demoOtp, onVerific
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
+  const [feedback, setFeedback] = useState('');
   const requestInProgress = useRef(false);
   const inputs = useRef([]);
+  const showFeedback = (title, message) => {
+    setFeedback(message);
+    Alert.alert(title, message);
+  };
 
   const handleChangeText = (text, index) => {
     const digits = text.replace(/\D/g, '').slice(0, 6 - index);
@@ -30,7 +35,7 @@ export default function EmailVerificationScreen({ email = '', demoOtp, onVerific
     if (requestInProgress.current) return;
     const fullCode = otp.join('');
     if (!/^\d{6}$/.test(fullCode)) {
-      Alert.alert('Incomplete Code', 'Please enter all 6 digits of the OTP code.');
+      showFeedback('Incomplete Code', 'Please enter all 6 digits of the OTP code.');
       return;
     }
 
@@ -40,15 +45,15 @@ export default function EmailVerificationScreen({ email = '', demoOtp, onVerific
       const res = await apiService.verifyOtp(email, fullCode);
 
       if (res && res.success) {
-        Alert.alert('Success 🎉', 'Your university email has been verified successfully!');
+        showFeedback('Success', demoOtp ? 'Demo code verified successfully.' : 'Your email has been verified successfully!');
         if (onVerificationSuccess) {
           onVerificationSuccess();
         }
       } else {
-        Alert.alert('Verification Failed', res?.message || 'Invalid code');
+        showFeedback('Verification Failed', res?.message || 'Invalid code');
       }
     } catch (err) {
-      Alert.alert('Error', err.message);
+      showFeedback('Error', err.message);
     } finally {
       requestInProgress.current = false;
       setLoading(false);
@@ -60,13 +65,13 @@ export default function EmailVerificationScreen({ email = '', demoOtp, onVerific
     requestInProgress.current = true;
     setResending(true);
     try {
-      const res = await apiService.sendOtp(email);
+      const res = await apiService.sendOtp(email, { demo: Boolean(demoOtp) });
       if (!res?.success) throw new Error(res?.message || 'Unable to resend the code. Please try again.');
       setOtp(['', '', '', '', '', '']);
       inputs.current[0]?.focus();
-      Alert.alert('OTP Resent', `A new OTP has been sent to ${email}.${res.otp ? ` (Demo Code: ${res.otp})` : ''}`);
+      showFeedback('OTP Resent', res.otp ? `Demo code: ${res.otp}. No email is sent.` : `A new OTP has been sent to ${email}.`);
     } catch (error) {
-      Alert.alert('Resend Failed', error.message || 'Please try again.');
+      showFeedback('Resend Failed', error.message || 'Please try again.');
     } finally {
       requestInProgress.current = false;
       setResending(false);
@@ -77,9 +82,10 @@ export default function EmailVerificationScreen({ email = '', demoOtp, onVerific
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.card}>
-        <Text style={styles.title}>Enter the OTP sent to your email.</Text>
-        <Text style={styles.subtitle}>Sent to {email}</Text>
+        <Text style={styles.title}>{demoOtp ? 'Enter the demo OTP.' : 'Enter the OTP sent to your email.'}</Text>
+        <Text style={styles.subtitle}>{demoOtp ? `For ${email}. No email is sent.` : `Sent to ${email}`}</Text>
         {!!demoOtp && <Text style={styles.subtitle}>Demo code: {demoOtp}</Text>}
+        {!!feedback && <Text style={styles.subtitle} accessibilityLiveRegion="polite">{feedback}</Text>}
 
         {/* 6 Digit Input Boxes */}
         <View style={styles.otpRow}>

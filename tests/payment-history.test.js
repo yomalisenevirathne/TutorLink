@@ -205,6 +205,89 @@ test('a failed real OTP verification never falls back to accepting the demo code
   assert.equal((await apiService.verifyOtp('test@example.com', '123456')).success, false);
 });
 
+test('tutor demo OTP accepts a non-university mailbox without sending mail or authenticating', async () => {
+  const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase: {
+    auth: new Proxy({}, { get() { throw new Error('Demo OTP must not call Supabase Auth'); } }),
+  } } });
+  const email = '  Made.Up.Tutor@gmail.com  ';
+  assert.equal((await apiService.sendOtp('not an email', { demo: true })).success, false);
+  assert.equal((await apiService.verifyOtp(email, '123456')).success, false);
+  assert.equal((await apiService.sendOtp(email, { demo: true })).otp, '123456');
+  assert.equal((await apiService.verifyOtp(email, '654321')).success, false);
+  assert.equal((await apiService.verifyOtp(email, '12345')).success, false);
+  assert.equal((await apiService.verifyOtp('another@gmail.com', '123456')).success, false);
+  assert.equal((await apiService.verifyOtp(email, '123456')).success, true);
+  assert.equal((await apiService.verifyOtp(email, '123456')).success, false);
+  assert.equal((await apiService.sendOtp(email, { demo: true })).otp, '123456');
+  assert.equal((await apiService.verifyOtp(email, '123456')).success, true);
+});
+
+test('tutor demo codes expire and logout clears an outstanding code', async () => {
+  const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase: {
+    auth: { signOut: async () => ({ error: null }) },
+  } } });
+  const originalNow = Date.now;
+  let now = originalNow();
+  Date.now = () => now;
+  try {
+    await apiService.sendOtp('fake@gmail.com', { demo: true });
+    now += 10 * 60 * 1000 + 1;
+    assert.equal((await apiService.verifyOtp('fake@gmail.com', '123456')).success, false);
+    await apiService.sendOtp('fake@gmail.com', { demo: true });
+    await apiService.logout();
+    assert.equal((await apiService.verifyOtp('fake@gmail.com', '123456')).success, false);
+  } finally { Date.now = originalNow; }
+});
+
+test('demo OTP cannot mark a signed-in real account email as verified', async () => {
+  const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase: {
+    auth: { signInWithPassword: async () => ({ data: {
+      user: { id: userId, email: 'test@example.com' }, session: { access_token: 'real-session' },
+    }, error: null }) },
+  } } });
+  const { user } = await apiService.login('test@example.com', 'password');
+  await apiService.sendOtp(user.email, { demo: true });
+  assert.equal((await apiService.verifyOtp(user.email, '123456')).success, true);
+  assert.equal(user.isEmailVerified, false);
+});
+
+test('demo tutor registration still persists a real Supabase UUID and role profile', async () => {
+  const requests = [];
+  const supabase = {
+    auth: { signUp: async (options) => {
+      assert.equal(options.email, 'made.up.tutor@gmail.com');
+      assert.equal(options.options.data.role, 'Tutor');
+      return { data: { user: { id: userId, email: options.email }, session: { access_token: 'real-session' } }, error: null };
+    } },
+    from: (table) => ({ upsert: async (data) => { requests.push({ table, data }); return { error: null }; } }),
+  };
+  const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase } });
+  await apiService.sendOtp('made.up.tutor@gmail.com', { demo: true });
+  await apiService.verifyOtp('made.up.tutor@gmail.com', '123456');
+  const result = await apiService.register({ email: 'made.up.tutor@gmail.com', role: 'Tutor',
+    fullName: 'Demo Tutor', subjects: ['Physics'], password: 'password123', demoOtp: true });
+  assert.equal(result.success, true);
+  assert.equal(result.token, 'real-session');
+  assert.equal(result.user.id, userId);
+  assert.equal(result.user.isDemo, undefined);
+  assert.deepEqual(requests.map((r) => r.table), ['profiles', 'tutor_profiles']);
+  assert.equal(requests[0].data.id, userId);
+  assert.equal(requests[0].data.role, 'Tutor');
+  assert.equal(requests[1].data.user_id, userId);
+});
+
+test('demo tutor registration explains Confirm email when signup returns no session', async () => {
+  let writes = 0;
+  const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase: {
+    auth: { signUp: async () => ({ data: { user: { id: userId }, session: null }, error: null }) },
+    from() { writes++; throw new Error('Must not write without the new session'); },
+  } } });
+  const result = await apiService.register({ email: 'fake@gmail.com', role: 'Tutor', demoOtp: true, password: 'password123' });
+  assert.equal(result.success, false);
+  assert.match(result.message, /turn off Confirm email/);
+  assert.equal(writes, 0);
+});
+
 test('failed registrations do not create Supabase accounts through demo login', async () => {
   const supabase = { auth: { signUp: async () => ({ data: null, error: new Error('Registration failed') }) } };
   const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase } });

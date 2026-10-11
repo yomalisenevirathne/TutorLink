@@ -125,10 +125,32 @@ If using a separate REST feature on a physical phone, localhost points to that
 phone. Use the backend owner's reachable URL in `EXPO_PUBLIC_API_URL` and confirm
 the backend is running. Supabase registration and login do not require that REST server.
 
-The application uses real authentication by default. Optional classroom demo
-login can be enabled with `EXPO_PUBLIC_ENABLE_DEMO_AUTH=true`. It does not create
-a real tutor identity. Supabase OTP emails must include `{{ .Token }}` and use
-six digits for the verification screen.
+Tutor registration uses demo OTP **123456**. Enter any correctly formatted email
+address (no university domain or existing mailbox is required), tap **verify email**,
+then enter the code. Resend creates the same code, valid for ten minutes. Verification
+opens above the form so returning does not discard the name, subjects or attachments.
+This code does not send email or create a Supabase session.
+
+To save these accounts in the existing Supabase database without receiving email:
+
+1. Open **Authentication > Sign In / Providers > Email** in the Supabase dashboard.
+2. Turn off **Confirm email**, keep email sign-up enabled, and save the setting.
+3. In the app, verify demo OTP **123456**, then tap **Create Account**.
+
+The app still creates a real Supabase Auth user and saves `profiles` (role `Tutor`)
+and `tutor_profiles` under that user's UUID. The merged directory displays this
+account alongside existing `tutors` rows. Registration no longer requires inserting
+a duplicate legacy listing. The existing tutor form uses password `password123`;
+use the supplied email and that password to sign in again. Existing emails remain
+subject to Supabase's account uniqueness rules. If Supabase returns no authenticated
+session, the app shows the configuration instructions instead of reporting a saved
+profile. This dashboard setting has not been changed by the agent; it applies to
+email sign-ups across the project, including student sign-ups.
+
+See [Supabase's Confirm Email configuration](https://supabase.com/docs/guides/auth/general-configuration).
+Other email verification flows still use Supabase OTP; those email templates must
+include `{{ .Token }}` and use six digits. Optional classroom demo login can be enabled
+with `EXPO_PUBLIC_ENABLE_DEMO_AUTH=true`; that fallback does not create a database identity.
 
 ## Manual checks
 
