@@ -139,36 +139,43 @@ export function FeedbackComment({ comment, viewerId, onReact, onReply, onEdit, o
       </Pressable>}
     </View>
     <Text style={styles.commentBody}>{comment.text}</Text>
-    {showOwnerActions ? <View style={styles.ownerActions} onAccessibilityEscape={closeMenu}>
-      <Pressable style={({ pressed }) => [styles.ownerAction, styles.editAction, pressed && styles.editActionPressed]}
-        onPress={() => selectMenuAction(onEdit)} disabled={busy}
-        accessibilityRole="button" accessibilityLabel="Edit your comment" accessibilityState={{ disabled: busy }}>
-        <Feather name="edit-3" size={16} color="#7C3AED" /><Text style={styles.editLabel}>Edit</Text>
-      </Pressable>
-      <Pressable style={({ pressed }) => [styles.ownerAction, styles.deleteAction, pressed && styles.deleteActionPressed]}
-        onPress={() => selectMenuAction(onDelete)} disabled={busy}
-        accessibilityRole="button" accessibilityLabel="Delete your comment" accessibilityState={{ disabled: busy }}>
-        <Feather name="trash-2" size={16} color="#D14359" /><Text style={styles.deleteLabel}>Delete</Text>
-      </Pressable>
-    </View> : <View style={styles.commentActions}>
+    <View style={[styles.commentActions, showOwnerActions && styles.compactActions]} onAccessibilityEscape={closeMenu}>
       {['like', 'dislike'].map((kind) => <Pressable key={kind}
-        style={({ pressed }) => [styles.reaction, ownReaction === kind && styles.activeReaction, pressed && styles.reactionPressed]}
+        style={({ pressed }) => [styles.reaction, showOwnerActions && styles.compactReaction,
+          ownReaction === kind && styles.activeReaction, pressed && styles.reactionPressed]}
         onPress={() => onReact(comment.id, kind)} disabled={busy} accessibilityRole="button"
         accessibilityLabel={`${kind === 'like' ? 'Like' : 'Dislike'} comment by ${comment.authorName}`}
         aria-pressed={ownReaction === kind} aria-disabled={busy}
         accessibilityState={{ selected: ownReaction === kind, disabled: busy }}>
-        <Feather name={kind === 'like' ? 'thumbs-up' : 'thumbs-down'} size={17} color={ownReaction === kind ? '#6500FF' : '#514A58'} />
-        {reactions.includes(kind) && <Text style={[styles.reactionCount, ownReaction === kind && styles.selectedReaction]}>
+        <Feather name={kind === 'like' ? 'thumbs-up' : 'thumbs-down'} size={showOwnerActions ? 14 : 17} color={ownReaction === kind ? '#6500FF' : '#514A58'} />
+        {reactions.includes(kind) && <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
+          style={[styles.reactionCount, showOwnerActions && styles.compactReactionText, ownReaction === kind && styles.selectedReaction]}>
           {reactions.filter((vote) => vote === kind).length}
         </Text>}
       </Pressable>)}
-      {!isReply && onReply && <Pressable style={({ pressed }) => [styles.reaction, styles.replyButton, pressed && styles.reactionPressed]}
+      {!isReply && onReply && <Pressable style={({ pressed }) => [styles.reaction, styles.replyButton,
+        showOwnerActions && styles.compactReaction, showOwnerActions && styles.compactReply, pressed && styles.reactionPressed]}
         onPress={() => onReply(comment)} disabled={busy}
         accessibilityRole="button" accessibilityLabel={`Reply to ${comment.authorName}`} accessibilityState={{ disabled: busy }}>
-        <Feather name="message-square" size={16} color="#746580" />
-        <Text style={styles.reactionCount}>Reply</Text>
+        <Feather name="message-square" size={showOwnerActions ? 14 : 16} color="#746580" />
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
+          style={[styles.reactionCount, showOwnerActions && styles.compactReactionText]}>Reply</Text>
       </Pressable>}
-    </View>}
+      {showOwnerActions && <>
+        <Pressable style={({ pressed }) => [styles.ownerAction, styles.editAction, pressed && styles.editActionPressed]}
+          onPress={() => selectMenuAction(onEdit)} disabled={busy}
+          accessibilityRole="button" accessibilityLabel="Edit your comment" accessibilityState={{ disabled: busy }}>
+          <Feather name="edit-3" size={14} color="#7C3AED" />
+          <Text style={styles.editLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Edit</Text>
+        </Pressable>
+        <Pressable style={({ pressed }) => [styles.ownerAction, styles.deleteAction, pressed && styles.deleteActionPressed]}
+          onPress={() => selectMenuAction(onDelete)} disabled={busy}
+          accessibilityRole="button" accessibilityLabel="Delete your comment" accessibilityState={{ disabled: busy }}>
+          <Feather name="trash-2" size={14} color="#D14359" />
+          <Text style={styles.deleteLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Delete</Text>
+        </Pressable>
+      </>}
+    </View>
   </View>;
 }
 
@@ -234,16 +241,19 @@ const styles = StyleSheet.create({
   youBadge: { fontSize: 10, fontWeight: '600', color: '#7C3AED', backgroundColor: '#F0E8FD', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 7, overflow: 'hidden' },
   moreButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
   moreButtonActive: { backgroundColor: '#F0E8FD' },
-  ownerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%', maxWidth: 240 },
-  ownerAction: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, borderWidth: 1, borderRadius: 11 },
+  ownerAction: { flex: 1.5, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, minHeight: 44, paddingHorizontal: 2, borderWidth: 1, borderRadius: 10 },
   editAction: { backgroundColor: '#F3ECFF', borderColor: '#D6BDF5' },
-  deleteAction: { backgroundColor: '#FFF2F4', borderColor: '#F3BCC6' },
+  deleteAction: { flex: 1.8, backgroundColor: '#FFF2F4', borderColor: '#F3BCC6' },
   editActionPressed: { backgroundColor: '#E8DAFC', borderColor: '#B68DEB' },
   deleteActionPressed: { backgroundColor: '#FFE1E7', borderColor: '#E897A7' },
-  editLabel: { fontSize: 13, fontWeight: '600', color: '#7C3AED' },
-  deleteLabel: { fontSize: 13, fontWeight: '600', color: '#D14359' },
+  editLabel: { flexShrink: 1, fontSize: 11, fontWeight: '600', color: '#7C3AED' },
+  deleteLabel: { flexShrink: 1, fontSize: 11, fontWeight: '600', color: '#D14359' },
   commentBody: { fontSize: 14, color: '#62536F', lineHeight: 23, marginTop: 12, marginBottom: 14 },
   commentActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  compactActions: { flexWrap: 'nowrap', alignItems: 'center', width: '100%', maxWidth: 380, gap: 4 },
+  compactReaction: { flex: 1, minWidth: 0, paddingHorizontal: 2, gap: 4, borderRadius: 10 },
+  compactReply: { flex: 1.5 },
+  compactReactionText: { flexShrink: 1, fontSize: 10 },
   reaction: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minWidth: 44, minHeight: 44, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: '#EEE9F5', backgroundColor: '#F8F6FC' },
   replyButton: { paddingHorizontal: 14 },
   activeReaction: { backgroundColor: '#EFE5FF', borderColor: '#D9C2FC' },
