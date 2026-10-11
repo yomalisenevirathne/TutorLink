@@ -142,6 +142,6 @@ const styles = StyleSheet.create({
   commentsTitle: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   commentCount: { fontSize: 11, fontWeight: '700', color: '#7C3AED', backgroundColor: '#EDE4FA', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   refreshButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#EEE7F9', alignItems: 'center', justifyContent: 'center' },
-  thread: { borderWidth: 1, borderColor: '#EEEAF5', borderRadius: 18, padding: 16, marginBottom: 14, backgroundColor: '#FFFFFF', boxShadow: '0px 2px 8px rgba(39, 20, 71, 0.04)' },
+  thread: { borderWidth: 1, borderColor: '#EDE6F6', borderRadius: 22, padding: 16, marginBottom: 14, backgroundColor: '#FFFFFF', boxShadow: '0px 4px 16px rgba(50, 28, 82, 0.05)' },
   empty: { padding: 28, gap: 12, alignItems: 'center', borderWidth: 1, borderRadius: 18, borderColor: '#EEEAF5', backgroundColor: '#FFFFFF' },
 });
