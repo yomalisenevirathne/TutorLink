@@ -10,7 +10,7 @@ const DiscoveryContext = createContext(undefined);
 export function DiscoveryProvider({ children }) {
     const [query, setQuery] = useState('');
     const [recentSearches, setRecentSearches] = useState([]);
-    const [filters, setFilters] = useState({ ...DEFAULT_FILTERS, mode: 'online' });
+    const [filters, setFilters] = useState({ ...DEFAULT_FILTERS });
     const [compareIds, setCompareIds] = useState([]);
     const [favoriteIds, setFavoriteIds] = useState([]);
     const [filterPresets, setFilterPresets] = useState([]);

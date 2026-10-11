@@ -153,3 +153,30 @@ test('history preserves tutor, booker, subject and booking snapshots from the sa
   assert.equal(payment.bookingId, 'booking-1');
   assert.equal(payment.avatarUrl, 'https://example.com/tutor.jpg');
 });
+
+test('profile-only Tutor UUIDs are accepted throughout linked booking confirmation and payment history', async () => {
+  const tutorId = 'd96130e6-002a-41b0-a8f2-b0e6c814a98c';
+  const profileReceipt = { ...linkedReceipt, tutorId, tutorName: 'kasunbandara', amount: 449,
+    booking: { ...linkedReceipt.booking, tutorId, tutorName: 'kasunbandara', sessionFee: 399, total: 449 } };
+  const profilePayment = { ...linkedPayment, tutor_id: tutorId, counterparty_name: 'kasunbandara', amount: '449.00' };
+  const profileBooking = { ...linkedBooking, tutor_id: tutorId, discovery_tutor_id: tutorId,
+    tutor_name: 'kasunbandara', total_fee: 449 };
+  const subject = service({ rpcData: { payment: profilePayment, booking: profileBooking }, rows: [profilePayment] });
+  const saved = await subject.saveDemoPayment(profileReceipt);
+  assert.equal(subject.requests[0].input.p_booking.tutorId, tutorId);
+  assert.equal(saved.booking.tutor_id, tutorId);
+  assert.equal(saved.booking.discovery_tutor_id, tutorId);
+  assert.equal(saved.tutor_id, tutorId);
+  const [history] = await subject.getDemoPaymentHistory(ownerId);
+  assert.equal(history.name, 'kasunbandara');
+  assert.equal(history.tutorId, tutorId);
+  assert.equal(history.bookingId, saved.booking.id);
+  assert.equal(history.amount, 449);
+});
+
+test('a payment response with another tutor ID never confirms a profile-only booking', async () => {
+  const tutorId = 'd96130e6-002a-41b0-a8f2-b0e6c814a98c';
+  const profileReceipt = { ...linkedReceipt, tutorId, booking: { ...linkedReceipt.booking, tutorId } };
+  await assert.rejects(service({ rpcData: { payment: linkedPayment, booking: linkedBooking } })
+    .saveDemoPayment(profileReceipt), /confirmed together/);
+});

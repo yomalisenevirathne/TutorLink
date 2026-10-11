@@ -7,3 +7,6 @@ backend/data.json
 .codex-web-check/
 .codex-export-results
 .codex-focused-results
+/FEEDBACK_SETUP.md
+/CARD_SETUP.md
+/BOOKING_PAYMENT_SETUP.md

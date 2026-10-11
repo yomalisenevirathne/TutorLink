@@ -89,7 +89,7 @@ export function TutorProfileScreen({ id, navigation }) {
           <Text style={styles.name}>{tutor.name}</Text>
           <VerifiedBadge status={tutor.verifiedStatus}/>
           <Text style={styles.meta}>
-            {tutor.university || 'University'} · Year {tutor.yearOfStudy || 1}
+            {tutor.university || 'Tutor'}{tutor.yearOfStudy ? ` · Year ${tutor.yearOfStudy}` : ''}
           </Text>
         </View>
 

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, shadow } from '../../../constants/colors';
-import { supabase } from '../../../utils/supabase';
+import { tutorService } from '../../../services/tutorService';
 import { Avatar } from '../components/Avatar';
 import { RatingStars } from '../components/RatingStars';
 import { VerifiedBadge } from '../components/VerifiedBadge';
@@ -63,11 +63,7 @@ export function CompareScreen({ navigation }) {
         async function fetchComparisonData() {
             try {
                 setLoading(true);
-                const { data: allData, error: allError } = await supabase
-                    .from('tutors')
-                    .select('*');
-                if (allError)
-                    throw allError;
+                const allData = await tutorService.list();
 
                 const normalizedAll = (allData || []).map((t) => ({
                     ...t,
@@ -120,8 +116,8 @@ export function CompareScreen({ navigation }) {
           subject: (t?.subjects?.[0]?.subjectName || t?.subjects?.[0] || 'General Tutoring'),
           role: `${t?.university || 'University'} · Year ${t?.yearOfStudy || 1}`,
           university: t?.university,
-          rating: t?.avgRating || '4.9',
-          reviewCount: t?.reviewCount || 28,
+          rating: t?.avgRating ?? 0,
+          reviewCount: t?.reviewCount ?? 0,
           hourlyRate: t?.hourlyRate || 700,
           fee: t?.hourlyRate || 700,
           photoUrl: t?.photoUrl,

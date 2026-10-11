@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, shadow } from '../../../constants/colors';
@@ -38,17 +39,24 @@ export function ResultsScreen({ navigation }) {
     const [sheetSection, setSheetSection] = useState(null);
     const [tutors, setTutors] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
+    const request = useRef(null);
     const feedbackRatings = useTutorRatingSummaries(tutors.map(tutor => tutor.id));
     const feedbackTutors = useMemo(() => feedbackRatings.loading || feedbackRatings.unavailable
         ? [] : withFeedbackRatings(tutors, feedbackRatings.summaries),
     [tutors, feedbackRatings.loading, feedbackRatings.unavailable, feedbackRatings.summaries]);
     const results = useMemo(() => applyFilters(feedbackTutors, query, filters), [feedbackTutors, query, filters]);
 
-    useEffect(() => {
+    const loadTutors = useCallback(() => {
+        request.current?.abort();
+        const controller = new AbortController();
+        request.current = controller;
         async function fetchFilteredTutors() {
             try {
                 setLoading(true);
-                const data = await tutorService.list();
+                setLoadError('');
+                const data = await tutorService.list({ signal: controller.signal });
+                if (controller.signal.aborted) return;
                 const normalized = data.map((t) => ({
                     ...t,
                     hourlyRate: t.hourlyRate ?? t.hourly_rate ?? 0,
@@ -70,15 +78,22 @@ export function ResultsScreen({ navigation }) {
                 setTutors(normalized);
             }
             catch (err) {
+                if (controller.signal.aborted) return;
                 console.error('Error fetching search results:', err);
                 setTutors([]);
+                setLoadError('Tutors could not be loaded. Please try again.');
             }
             finally {
-                setLoading(false);
+                if (!controller.signal.aborted) setLoading(false);
             }
         }
         fetchFilteredTutors();
     }, []);
+
+    useFocusEffect(useCallback(() => {
+        loadTutors();
+        return () => request.current?.abort();
+    }, [loadTutors]));
 
     const activeCount = countActiveFilters(filters);
     const open = (section) => setSheetSection(section);
@@ -126,6 +141,12 @@ export function ResultsScreen({ navigation }) {
     ];
 
     return (<SafeAreaView style={styles.safe} edges={['top']}>
+      {!!loadError && <View>
+        <Text accessibilityRole="alert">{loadError}</Text>
+        <Pressable accessibilityRole="button" onPress={loadTutors}>
+          <Text>Retry loading tutors</Text>
+        </Pressable>
+      </View>}
       <View style={styles.header}>
         <View style={styles.queryRow}>
           <Pressable onPress={() => navigation?.goBack()} hitSlop={10} accessibilityLabel="Back">
@@ -191,8 +212,8 @@ export function ResultsScreen({ navigation }) {
                       subject: (item.subjects?.[0]?.subjectName || item.subjects?.[0] || 'General Tutoring'),
                       role: `${item.university || 'University'} · Year ${item.yearOfStudy || 1}`,
                       university: item.university,
-                      rating: item.avgRating || '4.9',
-                      reviewCount: item.reviewCount || 28,
+                      rating: item.avgRating ?? 0,
+                      reviewCount: item.reviewCount ?? 0,
                       hourlyRate: item.hourlyRate || 700,
                       fee: item.hourlyRate || 700,
                       photoUrl: item.photoUrl,

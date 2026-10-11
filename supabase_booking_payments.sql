@@ -79,6 +79,7 @@ BEGIN
 
   -- IDs in the discovery tutors table are text; bookings.tutor_id uses profile UUIDs.
   BEGIN
+    -- PROFILE_TUTOR_BOOKING_V1: resolve listing IDs first, then Tutor account UUIDs.
     SELECT t.id::text, trim(t.name), coalesce(t.photo_url, t."photoUrl"), t.user_id
       INTO STRICT v_tutor_id, v_tutor_name, v_tutor_photo, v_tutor_user
       FROM public.tutors t
@@ -87,7 +88,16 @@ BEGIN
         OR (nullif(p_booking->>'tutorId', '') IS NULL
           AND lower(trim(t.name)) = lower(trim(p_booking->>'tutorName')));
   EXCEPTION
-    WHEN no_data_found OR too_many_rows THEN
+    WHEN no_data_found THEN
+      SELECT p.id::text, trim(p.full_name), p.avatar_url, p.id
+        INTO v_tutor_id, v_tutor_name, v_tutor_photo, v_tutor_user
+        FROM public.profiles p
+        WHERE p.role = 'Tutor'
+          AND p.id::text = nullif(p_booking->>'tutorId', '');
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'Please select a tutor profile before booking.';
+      END IF;
+    WHEN too_many_rows THEN
       RAISE EXCEPTION 'Please select a tutor profile before booking.';
   END;
   IF v_tutor_name IS DISTINCT FROM trim(p_booking->>'tutorName') THEN

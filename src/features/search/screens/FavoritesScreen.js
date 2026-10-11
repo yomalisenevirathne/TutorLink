@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../../constants/colors';
-import { supabase } from '../../../utils/supabase';
+import { tutorService } from '../../../services/tutorService';
 import { TutorResultCard } from '../components/TutorResultCard';
 import { MAX_COMPARE, useDiscovery } from '../context/DiscoveryContext';
 import { wishlistService } from '../../../services/wishlistService';
@@ -26,11 +26,8 @@ export function FavoritesScreen({ navigation }) {
                 setLoading(true);
                 const savedItems = await wishlistService.list();
                 setNotes(Object.fromEntries(savedItems.map((item) => [item.tutor_id, item.note || ''])));
-                const { data, error } = await supabase
-                    .from('tutors')
-                    .select('*')
-                    .in('id', favoriteIds);
-                if (error) throw error;
+                const directory = await tutorService.list();
+                const data = directory.filter(tutor => favoriteIds.includes(tutor.id));
 
                 const normalized = (data || []).map((t) => ({
                     ...t,
@@ -81,7 +78,8 @@ export function FavoritesScreen({ navigation }) {
                                 favorited
                                 onToggleFavorite={() => toggleFavorite(item.id)}
                                 onRemove={() => toggleFavorite(item.id)}
-                                onQuickBook={() => navigation?.navigate('ScheduleScreen', { tutorId: item.id })}
+                                onQuickBook={() => navigation?.navigate('ScheduleScreen', { tutorId: item.id, tutorName: item.name,
+                                    subject: item.subjects?.[0]?.subjectName || item.subjects?.[0] || 'General Tutoring', tutor: item })}
                                 onViewProfile={() => navigation?.navigate('SearchTutorProfileScreen', { tutorId: item.id })}
                                 comparing={compareIds.includes(item.id)}
                                 onToggleCompare={() => toggleCompare(item.id)}

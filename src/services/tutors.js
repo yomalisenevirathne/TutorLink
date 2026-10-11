@@ -1,9 +1,10 @@
-import { supabase } from '../utils/supabase';
+import { getDirectoryTutor, listDirectoryTutors } from './tutorDirectory';
 
 export function normalizeFeedbackTutor(tutor) {
   const subjects = Array.isArray(tutor.subjects) ? tutor.subjects : (tutor.subject ? [tutor.subject] : []);
   return {
     id: tutor.id,
+    canReceiveFeedback: tutor.listingId !== null,
     fullName: tutor.name || 'Tutor',
     avatarUrl: tutor.photoUrl || null,
     university: tutor.university || '',
@@ -16,34 +17,13 @@ export function normalizeFeedbackTutor(tutor) {
 }
 
 export async function fetchTutorById(tutorId, signal) {
-  let query = supabase.from('tutors').select('*').eq('id', tutorId);
-  if (signal) query = query.abortSignal(signal);
-  const { data, error } = await query.maybeSingle();
-  if (error) throw error;
+  const data = await getDirectoryTutor(tutorId, { signal });
   if (!data) throw new Error('This tutor profile is unavailable.');
   return normalizeFeedbackTutor(data);
 }
 
-// Read every page so the database's response limit does not truncate the list.
+// Feedback and discovery resolve the same merged directory and stable tutor IDs.
 export async function fetchAllTutors({ signal } = {}) {
-  const tutors = [];
-  const pageSize = 200;
-  let offset = 0;
-
-  while (true) {
-    if (signal?.aborted) throw new Error('Tutor request cancelled.');
-    let query = supabase.from('tutors')
-      .select('*')
-      .order('name')
-      .order('id')
-      .range(offset, offset + pageSize - 1);
-    if (signal) query = query.abortSignal(signal);
-    const { data, error } = await query;
-    if (error) throw error;
-    if (!Array.isArray(data)) throw new Error('Invalid tutor response.');
-    if (!data.length) return tutors;
-
-    tutors.push(...data.map(normalizeFeedbackTutor));
-    offset += data.length;
-  }
+  const tutors = await listDirectoryTutors({ signal });
+  return tutors.map(normalizeFeedbackTutor);
 }

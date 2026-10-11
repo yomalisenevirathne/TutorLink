@@ -12,6 +12,19 @@ integration step. Review database changes with the owner of the existing feature
 
 ## Current behavior and limits
 
+- Discovery and the tutor feedback list read `tutors` together with `profiles`
+  filtered to `role = 'Tutor'`. `tutor_profiles` supplies optional subjects, rates,
+  and verification details. Records are deduplicated by account ID or normalized
+  email; existing listing IDs are retained. No row copy or schema migration is
+  required to display registered tutors. Home keeps its six-card recommendations;
+  See all clears filters and opens the full merged list.
+- The existing RLS policies must permit the signed-in viewer to read other Tutor
+  profiles. SQL Editor results alone do not establish app access. Read failures
+  display a retry message; policies that silently restrict rows still limit the
+  visible directory. No permissions are changed by these code changes.
+- Feedback writes in the existing schema reference `tutors.id`. Accounts without
+  a published listing can be viewed and selected for booking; their feedback
+  screen displays an unavailable message until an existing listing is linked.
 - Session saves update existing rows for the same tutor/date, including removed
   slots, rather than inserting another record on every save.
 - Calendar queries show only the selected tutor's configured slots. Tutor session
@@ -31,6 +44,41 @@ integration step. Review database changes with the owner of the existing feature
 - The existing prototype payment flow does not charge cards. Its existing
   `record_booking_payment` integration remains in use; inspect its installed
   function and permissions rather than applying migrations blindly.
+
+## Booking a Tutor account without a discovery listing
+
+The existing payment RPC originally resolved IDs only against `public.tutors`.
+That produces `Please select a tutor profile before booking.` for a tutor listed
+from `profiles` alone, even though discovery and the calendar can display them.
+
+For an existing installation, copy the entire
+`supabase_profile_tutor_booking_fix.sql` into the same Supabase project's SQL
+Editor and run it, then retry the failed confirmation. This patch reads the
+installed function definition and changes only its known tutor lookup block.
+The fallback accepts an exact `profiles.id` with `role = 'Tutor'`; it records that
+UUID in `bookings.tutor_id` and the same text ID in the payment snapshot. No tutor
+row copy, table migration, RLS change or client-side payment insert is required.
+Ownership checks, retries and booking/payment transaction behavior stay in the
+installed function. Applying the patch twice is safe.
+
+If the installed function has a different lookup, the patch stops without
+replacing it. Retrieve its definition for a matching patch:
+
+```sql
+SELECT pg_get_functiondef(
+  'public.record_booking_payment(text,uuid,jsonb)'::regprocedure
+);
+```
+
+The canonical `supabase_booking_payments.sql` also includes the corrected lookup
+for future installations. Existing installations should use the targeted patch
+above. The targeted patch has been tested in an isolated local PostgreSQL engine;
+it has not been applied to the live Supabase project by this agent.
+
+Optional SQL tests use a separately installed `@electric-sql/pglite` package at
+`TUTORLINK_PGLITE_PATH` (or the temporary TutorLink SQL verification directory).
+They reproduce the original failure, verify both Tutor sources, deny Student
+profiles and foreign cards, and check retries, rescheduling and rollback.
 
 ## Interpreting the provided startup logs
 

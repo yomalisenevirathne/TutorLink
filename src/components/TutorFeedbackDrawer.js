@@ -85,6 +85,10 @@ export default function TutorFeedbackDrawer({ tutor, user, onClose, onViewCommen
           <TouchableOpacity style={feedbackStyles.retry} onPress={feedback.refresh} accessibilityRole="button">
             <Text style={feedbackStyles.linkText}>Retry</Text>
           </TouchableOpacity>
+        </View> : tutor.canReceiveFeedback === false ? <View style={[feedbackStyles.state, { flex: 1 }]}>
+          <FeedbackAvatar name={tutor.fullName} uri={tutor.avatarUrl} />
+          <Text style={feedbackStyles.sectionTitle}>{tutor.fullName}</Text>
+          <Text style={feedbackStyles.stateText}>Feedback is not available for this tutor yet.</Text>
         </View> : ratingMode ? <>
           <View style={styles.entryHeading}>
             <TouchableOpacity style={styles.entryBack} onPress={finishEntry} disabled={feedback.busy}

@@ -1,16 +1,7 @@
 import { supabase } from '../utils/supabase';
+import { getDirectoryTutor, listDirectoryTutors, normalizeDirectoryTutor } from './tutorDirectory';
 
-const toTutor = (row) => ({
-  ...row,
-  photoUrl: row.photo_url ?? row.photoUrl ?? null,
-  hourlyRate: row.hourly_rate ?? row.hourlyRate ?? 0,
-  avgRating: row.avg_rating ?? row.avgRating ?? row.rating ?? 0,
-  reviewCount: row.review_count ?? row.reviewCount ?? row.total_reviews ?? 0,
-  verifiedStatus: row.verified_status ?? row.verifiedStatus ?? (row.is_verified ? 'verified' : 'unverified'),
-  modesOffered: row.session_modes ?? row.modesOffered ?? [],
-  teachingStyleTags: row.teaching_style_tags ?? row.teachingStyleTags ?? [],
-  yearOfStudy: row.year_of_study ?? row.yearOfStudy ?? 1,
-});
+const toTutor = normalizeDirectoryTutor;
 
 const isUuid = (value) =>
   typeof value === 'string' &&
@@ -39,30 +30,12 @@ const assertNoError = (error, operation) => {
 };
 
 export const tutorService = {
-  async list() {
-    const { data, error } = await supabase
-      .from('tutors')
-      .select('*')
-      .order('name', { ascending: true });
-    assertNoError(error, 'load');
-    return (data || []).map(toTutor);
+  async list(options) {
+    return listDirectoryTutors(options);
   },
 
-  async getById(id) {
-    if (!id) throw new Error('A tutor id is required.');
-    const { data } = await supabase.from('tutors').select('*').eq('id', id).maybeSingle();
-    if (data) return toTutor(data);
-
-    // If not found in tutors table, check tutor_profiles
-    if (isUuid(id)) {
-      const { data: profData } = await supabase
-        .from('tutor_profiles')
-        .select('*')
-        .eq('user_id', id)
-        .maybeSingle();
-      if (profData) return toTutor(profData);
-    }
-    return null;
+  async getById(id, options) {
+    return getDirectoryTutor(id, options);
   },
 
   async getByEmail(email) {

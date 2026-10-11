@@ -127,7 +127,10 @@ export default function FeedbackCommentsScreen({ tutorId, user, onBack }) {
       </TouchableOpacity>
       <Text style={feedbackStyles.headerTitle} accessibilityRole="header">Feedback &amp; Comments</Text>
     </View>
-    {tutor ? <TutorComments key={tutor.id} tutor={tutor} user={user} /> : <View style={[feedbackStyles.state, { flex: 1 }]}>
+    {tutor?.canReceiveFeedback === false ? <View style={[feedbackStyles.state, { flex: 1 }]}>
+      <Text style={feedbackStyles.sectionTitle}>{tutor.fullName}</Text>
+      <Text style={feedbackStyles.stateText}>Feedback is not available for this tutor yet.</Text>
+    </View> : tutor ? <TutorComments key={tutor.id} tutor={tutor} user={user} /> : <View style={[feedbackStyles.state, { flex: 1 }]}>
       {error ? <>
         <Text style={feedbackStyles.stateText} accessibilityRole="alert">{error}</Text>
         <TouchableOpacity style={feedbackStyles.retry} onPress={() => setAttempt((previous) => previous + 1)} accessibilityRole="button">

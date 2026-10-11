@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View, } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, shadow } from '../../../constants/colors';
@@ -32,11 +33,13 @@ const DEFAULT_POPULAR_SUBJECTS = [
 ];
 
 export function HomeScreen({ navigation }) {
-    const { filters, updateFilters, submitSearch, favoriteIds } = useDiscovery();
+    const { filters, updateFilters, resetFilters, submitSearch, favoriteIds } = useDiscovery();
     const sessionMode = filters?.mode === 'physical' ? 'physical' : 'online';
     const [recommendedTutors, setRecommendedTutors] = useState([]);
     const [popularSubjects, setPopularSubjects] = useState(DEFAULT_POPULAR_SUBJECTS);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
+    const request = useRef(null);
     const feedbackRatings = useTutorRatingSummaries(recommendedTutors.map(tutor => tutor.id));
 
     useEffect(() => {
@@ -61,11 +64,16 @@ export function HomeScreen({ navigation }) {
         fetchSubjects();
     }, []);
 
-    useEffect(() => {
+    const loadTutors = useCallback(() => {
+        request.current?.abort();
+        const controller = new AbortController();
+        request.current = controller;
         async function fetchRecommendedTutors() {
             try {
                 setLoading(true);
-                const allTutors = await tutorService.list();
+                setLoadError('');
+                const allTutors = await tutorService.list({ signal: controller.signal });
+                if (controller.signal.aborted) return;
                 let rawList = allTutors.filter((t) => {
                     const modes = Array.isArray(t.modesOffered) ? t.modesOffered : [];
                     return modes.length === 0 || modes.includes(sessionMode);
@@ -85,14 +93,21 @@ export function HomeScreen({ navigation }) {
                 setRecommendedTutors(normalized);
             }
             catch (err) {
+                if (controller.signal.aborted) return;
                 console.error('Error fetching recommended tutors:', err);
+                setLoadError('Tutors could not be loaded. Please try again.');
             }
             finally {
-                setLoading(false);
+                if (!controller.signal.aborted) setLoading(false);
             }
         }
         fetchRecommendedTutors();
     }, [sessionMode]);
+
+    useFocusEffect(useCallback(() => {
+        loadTutors();
+        return () => request.current?.abort();
+    }, [loadTutors]));
 
     const openResults = () => navigation?.navigate('ResultsScreen');
 
@@ -169,12 +184,20 @@ export function HomeScreen({ navigation }) {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recommended Tutors</Text>
           <Pressable onPress={() => {
+            resetFilters();
             submitSearch('');
             openResults();
         }} hitSlop={8}>
             <Text style={styles.seeAll}>See all</Text>
           </Pressable>
         </View>
+
+        {!!loadError && <View>
+          <Text accessibilityRole="alert">{loadError}</Text>
+          <Pressable accessibilityRole="button" onPress={loadTutors}>
+            <Text style={styles.seeAll}>Retry</Text>
+          </Pressable>
+        </View>}
 
         {loading ? (
           <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }}/>

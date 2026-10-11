@@ -14,6 +14,7 @@ function services(respond) {
       const query = {
         select(columns) { request.columns = columns; return query; },
         eq(column, value) { request.filters.push([column, value]); return query; },
+        in(column, values) { request.filters.push([column, values]); return query; },
         order(column) { request.order.push(column); return query; },
         range(start, end) { request.range = [start, end]; return query; },
         abortSignal(signal) { request.signal = signal; return query; },
@@ -36,7 +37,8 @@ function services(respond) {
     }, module, module.exports);
     return module.exports;
   }
-  const tutors = load('tutors', { '../utils/supabase': { supabase: client } });
+  const directory = load('tutorDirectory', { '../utils/supabase': { supabase: client } });
+  const tutors = load('tutors', { './tutorDirectory': directory });
   const feedback = load('feedback', {
     '../utils/supabase': { supabase: client },
     './tutors': tutors,
@@ -54,7 +56,7 @@ const tutor = {
 test('the feedback list reads all tutors pages including unverified tutors and preserves text IDs', async () => {
   const unverified = { id: 't2', name: 'Thisal Seniya', verifiedStatus: 'unverified' };
   const { tutors, requests } = services(request => ({
-    data: request.range[0] === 0 ? [tutor, unverified] : [], error: null,
+    data: request.table === 'tutors' && request.range[0] === 0 ? [tutor, unverified] : [], error: null,
   }));
   const records = await tutors.fetchAllTutors();
   assert.deepEqual(records.map(record => record.id), ['t10', 't2']);
@@ -64,12 +66,14 @@ test('the feedback list reads all tutors pages including unverified tutors and p
   assert.deepEqual(records[0].subjects, ['Programming', 'Mathematics']);
   assert.deepEqual(records[1].subjects, []);
   assert.equal(records[1].verifiedStatus, 'unverified');
-  assert.deepEqual(requests.map(request => request.range), [[0, 199], [2, 201]]);
-  for (const request of requests) {
-    assert.equal(request.table, 'tutors');
-    assert.deepEqual(request.order, ['name', 'id']);
+  const listingRequests = requests.filter(request => request.table === 'tutors');
+  assert.deepEqual(listingRequests.map(request => request.range), [[0, 199], [2, 201]]);
+  for (const request of listingRequests) {
+    assert.deepEqual(request.order, ['id']);
     assert.deepEqual(request.filters, []);
   }
+  const profileRequest = requests.find(request => request.table === 'profiles');
+  assert.deepEqual(profileRequest.filters, [['role', 'Tutor']]);
 });
 
 test('View all resolves the same tutors record and photo using its text ID', async () => {

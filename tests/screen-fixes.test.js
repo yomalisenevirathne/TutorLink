@@ -5,7 +5,7 @@ const path = require('node:path');
 const { transformSync } = require('@babel/core');
 
 // A small hook harness lets these tests exercise screen actions without a device.
-function screen(file, dependencies = {}) {
+function screen(file, dependencies = {}, exportName = 'default') {
   const slots = [];
   const alerts = [];
   let cursor = 0;
@@ -28,6 +28,7 @@ function screen(file, dependencies = {}) {
       return slots[index].callback;
     },
   };
+  react.useMemo = (callback, deps) => react.useCallback(callback, deps)();
   const effect = (callback, deps = [callback]) => {
     const index = cursor++;
     if (!slots[index] || deps.some((value, i) => value !== slots[index].deps[i])) {
@@ -62,7 +63,7 @@ function screen(file, dependencies = {}) {
     render(props) {
       cursor = 0;
       effects = [];
-      const tree = module.exports.default(props);
+      const tree = module.exports[exportName](props);
       effects.forEach((run) => run());
       return tree;
     },
@@ -304,4 +305,97 @@ test('a failed session load explains why saving is disabled', async () => {
   assert.equal(action(tree, 'Save & Update Session').disabled, true);
   assert.match(text(mainContent(tree)), /Cannot save until the session loads/);
   assert.ok(action(tree, 'Retry'));
+});
+
+function discoveryScreen(file, tutors, context = {}, list = async () => tutors) {
+  const { code } = transformSync(fs.readFileSync(path.join(__dirname, '../src/features/search/utils/filters.js'), 'utf8'), {
+    babelrc: false, configFile: false, plugins: ['@babel/plugin-transform-modules-commonjs'],
+  });
+  const filtersModule = { exports: {} };
+  new Function('module', 'exports', code)(filtersModule, filtersModule.exports);
+  const filters = filtersModule.exports;
+  const query = { select: () => query, limit: async () => ({ data: [], error: null }) };
+  const feedback = { loading: false, unavailable: false,
+    summaries: new Map(tutors.map(tutor => [tutor.id, { average: 0, total: 0 }])) };
+  return screen(file, {
+    '@expo/vector-icons/Ionicons': { __esModule: true, default: 'Ionicons' },
+    'react-native-safe-area-context': { SafeAreaView: 'SafeAreaView', useSafeAreaInsets: () => ({ bottom: 0 }) },
+    '../../../constants/colors': { colors: {}, shadow: {} },
+    '../../../utils/supabase': { supabase: { from: () => query } },
+    '../../../services/tutorService': { tutorService: { list } },
+    '../../../hooks/useTutorRatingSummaries': { __esModule: true, default: () => feedback },
+    '../../../data/tutorFeedbackSearch': { withFeedbackRatings: (rows) => rows.map(row => ({ ...row, avgRating: 0, reviewCount: 0 })) },
+    '../context/DiscoveryContext': { MAX_COMPARE: 3, useDiscovery: () => ({
+      filters: filters.DEFAULT_FILTERS, query: '', favoriteIds: [], compareIds: [],
+      updateFilters: () => {}, resetFilters: () => {}, submitSearch: () => {}, ...context,
+    }) },
+    '../utils/filters': filters,
+    '../components/Chip': { Chip: 'Chip' },
+    '../components/TutorCard': { TutorCard: 'TutorCard' },
+    '../components/TutorResultCard': { TutorResultCard: 'TutorResultCard' },
+    '../components/FilterPill': { FilterPill: 'FilterPill' },
+    '../components/NoResultsState': { NoResultsState: 'NoResultsState' },
+    './FilterSheet': { FilterSheet: 'FilterSheet' },
+  }, file.endsWith('ResultsScreen.js') ? 'ResultsScreen' : 'default');
+}
+
+const directoryAccounts = [
+  { id: 't10', name: 'Existing Tutor', hourlyRate: 925, modesOffered: ['online'] },
+  { id: 'd96130e6-002a-41b0-a8f2-b0e6c814a98c', name: 'kasunbandara', listingId: null, hourlyRate: 0, modesOffered: [], subjects: [] },
+];
+
+test('Home recommends both legacy listings and registered Tutor accounts, and See all clears old filters', async () => {
+  const routes = [];
+  let reset = 0;
+  let search;
+  const view = discoveryScreen('src/features/search/screens/HomeScreen.js', directoryAccounts, {
+    resetFilters: () => { reset++; }, submitSearch: value => { search = value; },
+  });
+  const props = { navigation: { navigate: (...args) => routes.push(args) } };
+  view.render(props);
+  await flush();
+  const tree = view.render(props);
+  const list = nodes(tree).find(node => node.type === 'FlatList');
+  assert.deepEqual(list.props.data.map(tutor => tutor.id), directoryAccounts.map(tutor => tutor.id));
+  list.props.renderItem({ item: list.props.data[1] }).props.onPress();
+  assert.equal(routes[0][1].tutorId, directoryAccounts[1].id);
+  action(tree, 'See all').onPress();
+  assert.equal(reset, 1);
+  assert.equal(search, '');
+  assert.equal(routes[1][0], 'ResultsScreen');
+});
+
+test('the all-tutor results include accounts without a listing or configured session mode', async () => {
+  const routes = [];
+  const view = discoveryScreen('src/features/search/screens/ResultsScreen.js', directoryAccounts);
+  const props = { navigation: { navigate: (...args) => routes.push(args) } };
+  view.render(props);
+  await flush();
+  const tree = view.render(props);
+  const list = nodes(tree).find(node => node.type === 'FlatList');
+  assert.equal(list.props.data.length, 2);
+  const account = list.props.data.find(tutor => tutor.id === directoryAccounts[1].id);
+  const card = list.props.renderItem({ item: account });
+  card.props.onViewProfile();
+  assert.equal(routes[0][1].tutorName, 'kasunbandara');
+  card.props.onQuickBook();
+  assert.equal(routes[1][1].tutorId, account.id);
+  assert.equal(routes[1][1].tutor.rating, 0);
+  assert.equal(routes[1][1].tutor.reviewCount, 0);
+});
+
+test('Home shows a retry message when the merged directory cannot be read', async () => {
+  let attempts = 0;
+  const view = discoveryScreen('src/features/search/screens/HomeScreen.js', [], {}, async () => {
+    attempts++;
+    throw new Error('Permission denied');
+  });
+  view.render({});
+  await flush();
+  let tree = view.render({});
+  assert.match(text(tree), /Tutors could not be loaded/);
+  action(tree, 'Retry').onPress();
+  view.render({});
+  await flush();
+  assert.equal(attempts, 2);
 });
