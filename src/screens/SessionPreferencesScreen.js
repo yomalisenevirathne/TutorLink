@@ -16,6 +16,7 @@ export default function SessionPreferencesScreen({
   navigation,
   currentBooking,
   getCapacityForSlot,
+  currentUser,
 }) {
   const {
     year = new Date().getFullYear(),
@@ -41,8 +42,11 @@ export default function SessionPreferencesScreen({
     let isMounted = true;
     const loadLiveCapacity = async () => {
       setLoadingCapacity(true);
+      setCapacityError(null);
+      setDbLoaded(false);
       try {
-        const liveCap = await fetchCapacityForSlot(year, month, date, slot, rescheduleId);
+        const liveCap = await fetchCapacityForSlot(year, month, date, slot, rescheduleId,
+          currentBooking?.tutorName || currentBooking?.tutor?.name, currentUser);
         if (isMounted && liveCap) {
           setDbCapacity(liveCap);
           setDbLoaded(true);
@@ -61,7 +65,7 @@ export default function SessionPreferencesScreen({
     return () => {
       isMounted = false;
     };
-  }, [year, month, date, slot, rescheduleId]);
+  }, [year, month, date, slot, rescheduleId, currentBooking?.tutorName, currentBooking?.tutor?.name, currentUser]);
 
   // Fallback to in-memory local state if DB hasn't loaded yet
   const localCap = getCapacityForSlot
@@ -70,17 +74,20 @@ export default function SessionPreferencesScreen({
 
   // Live Supabase database query is the primary source of truth once loaded
   const effectiveCap = dbLoaded ? dbCapacity : (localCap || dbCapacity);
-  const isPrivateDisabled = Boolean(effectiveCap.privateBooked);
   const smallCount = Number(effectiveCap.smallBookedCount || 0);
   const largeCount = Number(effectiveCap.largeBookedCount || 0);
+  const isPrivateDisabled = Boolean(effectiveCap.privateBooked) || smallCount + largeCount > 0;
+  const seatsLeft = Math.max(0, Number(currentBooking?.maxCapacity ?? 10) - smallCount - largeCount);
 
-  const smallSeatsLeft = Math.max(0, 5 - smallCount);
-  const isSmallFull = smallSeatsLeft === 0;
+  const smallSeatsLeft = Math.min(seatsLeft, Math.max(0, 5 - smallCount));
+  const isSmallFull = effectiveCap.privateBooked || smallSeatsLeft === 0;
 
-  const largeSeatsLeft = Math.max(0, 10 - largeCount);
-  const isLargeFull = largeSeatsLeft === 0;
+  const largeSeatsLeft = Math.min(seatsLeft, Math.max(0, 10 - largeCount));
+  const isLargeFull = effectiveCap.privateBooked || largeSeatsLeft === 0;
 
-  const [selectedMode, setSelectedMode] = useState(currentBooking?.mode || 'physical');
+  const [requestedMode, setSelectedMode] = useState(currentBooking?.mode || 'physical');
+  const selectedMode = currentBooking?.sessionId ? currentBooking.mode : requestedMode;
+  const baseRate = Number(currentBooking?.sessionFee ?? currentBooking?.tutor?.hourlyRate ?? currentBooking?.tutor?.fee ?? 700);
   const [requestedGroupSize, setSelectedGroupSize] = useState(currentBooking?.groupSize || 'small');
   const availableGroups = [
     ...(!isSmallFull ? ['small'] : []),
@@ -148,7 +155,7 @@ export default function SessionPreferencesScreen({
           <TouchableOpacity style={{ marginRight: 14 }}>
             <Ionicons name="notifications" size={22} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation?.navigate('studentProfile')}>
+          <TouchableOpacity onPress={() => navigation?.navigate(String(currentUser?.role).toLowerCase() === 'tutor' ? 'tutorProfile' : 'studentProfile')}>
             <Ionicons name="person-circle" size={26} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -172,6 +179,7 @@ export default function SessionPreferencesScreen({
         <TouchableOpacity
           style={[styles.card, selectedMode === 'online' && styles.cardSelected]}
           onPress={() => setSelectedMode('online')}
+          disabled={!!currentBooking?.sessionId && currentBooking.mode !== 'online'}
           activeOpacity={0.8}
         >
           <View style={styles.cardLeft}>
@@ -196,6 +204,7 @@ export default function SessionPreferencesScreen({
         <TouchableOpacity
           style={[styles.card, selectedMode === 'physical' && styles.cardSelected]}
           onPress={() => setSelectedMode('physical')}
+          disabled={!!currentBooking?.sessionId && currentBooking.mode !== 'physical'}
           activeOpacity={0.8}
         >
           <View style={styles.cardLeft}>
@@ -211,7 +220,7 @@ export default function SessionPreferencesScreen({
               >
                 Physical Session
               </Text>
-              <Text style={styles.cardSubtitle}>At SLIIT Campus, Lab Room 401</Text>
+              <Text style={styles.cardSubtitle}>{currentBooking?.venue || 'Venue to be confirmed'}</Text>
             </View>
           </View>
           <View
@@ -263,7 +272,7 @@ export default function SessionPreferencesScreen({
             >
               {isPrivateDisabled
                 ? 'Already booked by another student'
-                : 'Personalized focused coaching • Rs. 1,200/hr'}
+                : `Personalized focused coaching - Rs. ${Math.round(baseRate * 1.7)}/hr`}
             </Text>
           </View>
           <View
@@ -320,7 +329,7 @@ export default function SessionPreferencesScreen({
                 isSmallFull && { color: '#9CA3AF' },
               ]}
             >
-              Learn collaboratively with peers • Rs. 700/hr
+              {`Learn collaboratively with peers - Rs. ${baseRate}/hr`}
             </Text>
             {!isSmallFull && (
               <View style={styles.progressBarTrack}>
@@ -387,7 +396,7 @@ export default function SessionPreferencesScreen({
                 isLargeFull && { color: '#9CA3AF' },
               ]}
             >
-              Standard interactive seminar • Rs. 400/hr
+              {`Standard interactive seminar - Rs. ${Math.round(baseRate * 0.57)}/hr`}
             </Text>
             {!isLargeFull && (
               <View style={styles.progressBarTrack}>

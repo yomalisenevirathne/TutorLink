@@ -1,40 +1,43 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { apiService } from '../services/api';
 
-export default function EmailVerificationScreen({ email = 'user@univ.ac.lk', demoOtp = '123456', onVerificationSuccess, onBack }) {
+export default function EmailVerificationScreen({ email = '', demoOtp, onVerificationSuccess, onBack }) {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const requestInProgress = useRef(false);
   const inputs = useRef([]);
 
   const handleChangeText = (text, index) => {
+    const digits = text.replace(/\D/g, '').slice(0, 6 - index);
     const newOtp = [...otp];
-    newOtp[index] = text;
+    if (!digits) newOtp[index] = '';
+    else [...digits].forEach((digit, offset) => { newOtp[index + offset] = digit; });
     setOtp(newOtp);
 
     // Auto-advance to next box if digit entered
-    if (text && index < 5) {
-      inputs.current[index + 1].focus();
-    }
+    if (digits) inputs.current[Math.min(index + digits.length, 5)]?.focus();
   };
 
   const handleKeyPress = (e, index) => {
     if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-      inputs.current[index - 1].focus();
+      inputs.current[index - 1]?.focus();
     }
   };
 
   const handleVerify = async () => {
+    if (requestInProgress.current) return;
     const fullCode = otp.join('');
-    if (fullCode.length < 6) {
+    if (!/^\d{6}$/.test(fullCode)) {
       Alert.alert('Incomplete Code', 'Please enter all 6 digits of the OTP code.');
       return;
     }
 
+    requestInProgress.current = true;
     setLoading(true);
     try {
       const res = await apiService.verifyOtp(email, fullCode);
-      setLoading(false);
 
       if (res && res.success) {
         Alert.alert('Success 🎉', 'Your university email has been verified successfully!');
@@ -45,34 +48,53 @@ export default function EmailVerificationScreen({ email = 'user@univ.ac.lk', dem
         Alert.alert('Verification Failed', res?.message || 'Invalid code');
       }
     } catch (err) {
-      setLoading(false);
       Alert.alert('Error', err.message);
+    } finally {
+      requestInProgress.current = false;
+      setLoading(false);
     }
   };
 
   const handleResendOtp = async () => {
-    const res = await apiService.sendOtp(email);
-    Alert.alert('OTP Resent', `A new OTP has been sent to ${email}. (Demo Code: ${res.otp || '123456'})`);
+    if (requestInProgress.current) return;
+    requestInProgress.current = true;
+    setResending(true);
+    try {
+      const res = await apiService.sendOtp(email);
+      if (!res?.success) throw new Error(res?.message || 'Unable to resend the code. Please try again.');
+      setOtp(['', '', '', '', '', '']);
+      inputs.current[0]?.focus();
+      Alert.alert('OTP Resent', `A new OTP has been sent to ${email}.${res.otp ? ` (Demo Code: ${res.otp})` : ''}`);
+    } catch (error) {
+      Alert.alert('Resend Failed', error.message || 'Please try again.');
+    } finally {
+      requestInProgress.current = false;
+      setResending(false);
+    }
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.card}>
         <Text style={styles.title}>Enter the OTP sent to your email.</Text>
         <Text style={styles.subtitle}>Sent to {email}</Text>
+        {!!demoOtp && <Text style={styles.subtitle}>Demo code: {demoOtp}</Text>}
 
         {/* 6 Digit Input Boxes */}
         <View style={styles.otpRow}>
           {otp.map((digit, idx) => (
             <TextInput
               key={idx}
-              ref={(ref) => (inputs.current[idx] = ref)}
+              ref={(ref) => { inputs.current[idx] = ref; }}
               style={styles.otpBox}
               value={digit}
               onChangeText={(text) => handleChangeText(text, idx)}
               onKeyPress={(e) => handleKeyPress(e, idx)}
               keyboardType="number-pad"
-              maxLength={1}
+              maxLength={6}
+              editable={!loading && !resending}
+              accessibilityLabel={`OTP digit ${idx + 1}`}
               selectTextOnFocus
             />
           ))}
@@ -81,13 +103,13 @@ export default function EmailVerificationScreen({ email = 'user@univ.ac.lk', dem
         <TouchableOpacity 
           style={[styles.verifyBtn, loading && styles.disabledBtn]} 
           onPress={handleVerify}
-          disabled={loading}
+          disabled={loading || resending || !email}
         >
           <Text style={styles.verifyBtnText}>{loading ? 'Verifying...' : 'Verify E-Mail'}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.resendBtn} onPress={handleResendOtp}>
-          <Text style={styles.resendBtnText}>{"Didn't receive code? Resend OTP"}</Text>
+        <TouchableOpacity style={styles.resendBtn} onPress={handleResendOtp} disabled={loading || resending || !email}>
+          <Text style={styles.resendBtnText}>{resending ? 'Resending...' : "Didn't receive code? Resend OTP"}</Text>
         </TouchableOpacity>
 
         {onBack && (
@@ -96,13 +118,14 @@ export default function EmailVerificationScreen({ email = 'user@univ.ac.lk', dem
           </TouchableOpacity>
         )}
       </View>
-    </View>
+    </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     padding: 20,
@@ -131,13 +154,15 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   otpRow: {
+    width: '100%',
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
     marginBottom: 32,
   },
   otpBox: {
-    width: 44,
+    flex: 1,
+    minWidth: 0,
     height: 48,
     borderWidth: 1.5,
     borderColor: '#CBD5E1',

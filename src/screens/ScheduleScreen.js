@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   View,
   Text,
@@ -31,124 +32,41 @@ export default function ScheduleScreen({
   );
   const [selectedSlot, setSelectedSlot] = useState(null);
 
-  // Active tutor session dates for calendar highlights
-  const [activeSessionDates, setActiveSessionDates] = useState([]);
-  
-  // Real dynamic slots fetched from Supabase `tutor_sessions` for the chosen tutor and date
-  const [availableSlots, setAvailableSlots] = useState([]);
-  const [loadingSlots, setLoadingSlots] = useState(false);
+  const currentTutorName = currentBooking?.tutorName || currentBooking?.tutor_name || currentBooking?.tutor?.name || '';
+  const [sessionsResult, setSessionsResult] = useState(null);
+  const [retry, setRetry] = useState(0);
+  const requestKey = `${currentTutorName}:${currentYear}:${currentMonth}:${retry}`;
+  const loadingSlots = sessionsResult?.key !== requestKey;
+  const loadError = loadingSlots ? '' : sessionsResult.error;
+  const sessions = loadingSlots ? [] : sessionsResult.sessions;
+  const activeSessionDates = [...new Set(sessions.filter((session) => session.slots?.length)
+    .map((session) => Number(session.date)))];
+  const daySessions = sessions.filter((session) => Number(session.date) === selectedDay);
+  const availableSlots = [...new Set(daySessions.flatMap((session) => Array.isArray(session.slots) ? session.slots : []))];
+  const validSlot = availableSlots.includes(selectedSlot) ? selectedSlot : null;
+  const selectedSession = daySessions.find((session) => session.slots?.includes(validSlot));
 
-  // Get active tutor name from currentBooking or fallback
-  const currentTutorName = 
-    currentBooking?.tutorName || 
-    currentBooking?.tutor_name || 
-    currentBooking?.tutor?.name || 
-    'Pamoda Dissanayak';
-
-  // 1. Fetch active session dates for this specific tutor in the current month (Case-insensitive matching)
-  useEffect(() => {
-    let isMounted = true;
-    const loadTutorDates = async () => {
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    setSessionsResult(null);
+    setSelectedSlot(null);
+    const load = async () => {
       try {
-        const { data, error } = await supabase
-          .from('tutor_sessions')
-          .select('date, tutor_name')
-          .eq('year', Number(currentYear))
-          .eq('month', Number(currentMonth + 1))
+        if (!currentTutorName) throw new Error('Choose a tutor from Home before selecting a session.');
+        const { data, error } = await supabase.from('tutor_sessions').select('*')
+          .eq('year', Number(currentYear)).eq('month', Number(currentMonth) + 1)
           .eq('is_accepting_bookings', true);
-
-        if (!error && data) {
-          const targetTutor = (currentTutorName || '').trim().toLowerCase();
-          
-          const filteredData = targetTutor 
-            ? data.filter(item => (item.tutor_name || '').trim().toLowerCase().includes(targetTutor))
-            : data;
-
-          const dates = [...new Set(filteredData.map((item) => Number(item.date)).filter(Boolean))];
-          if (isMounted) setActiveSessionDates(dates);
-        } else {
-          if (isMounted) setActiveSessionDates([]);
-        }
-      } catch (e) {
-        console.log('Error loading tutor dates:', e);
-        if (isMounted) setActiveSessionDates([]);
+        if (error) throw error;
+        const matches = (data || []).filter((session) =>
+          String(session.tutor_name || '').trim().toLowerCase() === currentTutorName.trim().toLowerCase());
+        if (active) setSessionsResult({ key: requestKey, sessions: matches, error: '' });
+      } catch (error) {
+        if (active) setSessionsResult({ key: requestKey, sessions: [], error: error.message || 'Unable to load sessions. Please try again.' });
       }
     };
-    loadTutorDates();
-    return () => {
-      isMounted = false;
-    };
-  }, [currentYear, currentMonth, currentTutorName]);
-
-  // 2. Fetch actual configured slots from `tutor_sessions` for this tutor on the selected day
-  useEffect(() => {
-    let isMounted = true;
-    const loadSlotsForDay = async () => {
-      if (!selectedDay) return;
-      setLoadingSlots(true);
-      try {
-        const targetTutor = (currentTutorName || '').trim().toLowerCase();
-        
-        const { data, error } = await supabase
-          .from('tutor_sessions')
-          .select('slots, tutor_name')
-          .eq('year', Number(currentYear))
-          .eq('month', Number(currentMonth + 1))
-          .eq('date', Number(selectedDay))
-          .eq('is_accepting_bookings', true);
-
-        if (error) {
-          console.error('Error fetching tutor slots:', error);
-          if (isMounted) setAvailableSlots([]);
-        } else if (data && data.length > 0) {
-          const filteredData = targetTutor
-            ? data.filter(item => (item.tutor_name || '').trim().toLowerCase().includes(targetTutor))
-            : data;
-
-          let allSlots = [];
-          filteredData.forEach(session => {
-            if (session.slots && Array.isArray(session.slots)) {
-              allSlots = [...allSlots, ...session.slots];
-            }
-          });
-          
-          // Safety net: if strict name match gave 0 slots, show all slots for that day
-          if (allSlots.length === 0 && data.length > 0) {
-            data.forEach(session => {
-              if (session.slots && Array.isArray(session.slots)) {
-                allSlots = [...allSlots, ...session.slots];
-              }
-            });
-          }
-
-          const uniqueSlots = [...new Set(allSlots)];
-          if (isMounted) {
-            setAvailableSlots(uniqueSlots);
-            if (uniqueSlots.length > 0) {
-              setSelectedSlot(uniqueSlots[0]);
-            } else {
-              setSelectedSlot(null);
-            }
-          }
-        } else {
-          if (isMounted) {
-            setAvailableSlots([]);
-            setSelectedSlot(null);
-          }
-        }
-      } catch (err) {
-        console.error('Exception loading slots:', err);
-        if (isMounted) setAvailableSlots([]);
-      } finally {
-        if (isMounted) setLoadingSlots(false);
-      }
-    };
-
-    loadSlotsForDay();
-    return () => {
-      isMounted = false;
-    };
-  }, [currentYear, currentMonth, selectedDay, currentTutorName]);
+    load();
+    return () => { active = false; };
+  }, [currentTutorName, currentYear, currentMonth, requestKey]));
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -174,6 +92,7 @@ export default function ScheduleScreen({
       nextMonth = 11;
       nextYear = currentYear - 1;
     }
+    setSelectedSlot(null);
     setCurrentMonth(nextMonth);
     setCurrentYear(nextYear);
 
@@ -192,6 +111,7 @@ export default function ScheduleScreen({
       nextMonth = 0;
       nextYear = currentYear + 1;
     }
+    setSelectedSlot(null);
     setCurrentMonth(nextMonth);
     setCurrentYear(nextYear);
 
@@ -212,7 +132,7 @@ export default function ScheduleScreen({
       Alert.alert('Invalid Date', 'You cannot select a past date.');
       return;
     }
-    if (!selectedSlot) {
+    if (loadingSlots || loadError || !validSlot || !selectedSession) {
       Alert.alert('Slot Required', 'Please select an available time slot.');
       return;
     }
@@ -222,7 +142,13 @@ export default function ScheduleScreen({
       month: currentMonth,
       monthName: monthNames[currentMonth],
       date: selectedDay,
-      slot: selectedSlot,
+      slot: validSlot,
+      sessionId: selectedSession.id,
+      sessionFee: Number(selectedSession.fee),
+      venue: selectedSession.venue,
+      mode: selectedSession.mode,
+      maxCapacity: Number(selectedSession.max_capacity),
+      subject: selectedSession.course_title,
       tutorName: currentTutorName,
       tutor: currentBooking?.tutor,
     });
@@ -318,7 +244,7 @@ export default function ScheduleScreen({
                       isPast && styles.disabledDateCell,
                       hasSession && !isSelected && !isPast && styles.sessionAccentCell,
                     ]}
-                    onPress={() => setSelectedDay(day)}
+                    onPress={() => { setSelectedSlot(null); setSelectedDay(day); }}
                     activeOpacity={0.7}
                   >
                     <Text
@@ -354,10 +280,17 @@ export default function ScheduleScreen({
             <ActivityIndicator size="small" color="#6A1B9A" />
             <Text style={styles.loadingText}>Loading available slots...</Text>
           </View>
+        ) : loadError ? (
+          <View style={styles.emptySlotCard}>
+            <Text style={styles.emptySlotText} accessibilityRole="alert">{loadError}</Text>
+            <TouchableOpacity onPress={() => setRetry((value) => value + 1)} accessibilityRole="button">
+              <Text style={styles.monthTitle}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         ) : availableSlots.length > 0 ? (
           <View style={styles.slotRow}>
             {availableSlots.map((time) => {
-              const isSelected = selectedSlot === time;
+              const isSelected = validSlot === time;
               return (
                 <TouchableOpacity
                   key={time}
@@ -389,7 +322,8 @@ export default function ScheduleScreen({
 
         {/* Primary Continue Button */}
         <TouchableOpacity
-          style={styles.continueBtn}
+          style={[styles.continueBtn, (loadingSlots || !!loadError || !validSlot) && { opacity: 0.5 }]}
+          disabled={loadingSlots || !!loadError || !validSlot}
           onPress={handleContinue}
           activeOpacity={0.85}
         >

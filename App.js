@@ -91,10 +91,6 @@ export default function App() {
     if (router.canDismiss()) router.dismissAll();
     setCurrentScreen(destination);
   };
-  const handleConfirmBooking = (booking) => {
-    setMyBookings((previous) => [booking, ...previous.filter((item) => item.id !== booking.id)]);
-    setCurrentBooking((previous) => ({ ...previous, rescheduleId: null }));
-  };
   const handleCancelBooking = (id) => setMyBookings((previous) => previous.map((booking) =>
     booking.id === id ? { ...booking, status: 'Cancelled' } : booking));
   const handleDeleteBooking = (id) => setMyBookings((previous) => previous.filter((booking) => booking.id !== id));
@@ -115,28 +111,39 @@ export default function App() {
       const target = screenName === 'Bookings' || (screenName === 'ScheduleScreen' && isTutorUser && !params.preview)
         ? (isTutorUser ? 'ManageSessionScreen' : 'ScheduleScreen') : screenName;
       if (!allScreens.includes(target)) return;
+      if (target === 'feedbackComments') {
+        router.navigate({ pathname: '/[page]', params: { page: target, tutorId: params.tutorId } });
+        return;
+      }
       setCurrentBooking((previous) => {
+        const nextTutorId = params.tutorId ?? params.tutor?.id;
+        const nextTutorName = params.tutorName || params.tutor_name || params.tutor?.name;
+        const sameTutor = nextTutorId ? nextTutorId === (previous.tutorId || previous.tutor?.id)
+          : !nextTutorName || nextTutorName === previous.tutor?.name;
+        const previousTutor = sameTutor ? previous.tutor : null;
         const tutorData = params.tutor || (params.tutorName ? {
-          id: params.tutorId ?? (params.tutorName === previous.tutor?.name ? previous.tutor?.id : null),
+          id: params.tutorId ?? previousTutor?.id ?? null,
           name: params.tutorName,
-          subject: params.subject || previous.tutor?.subject,
-          role: params.role || previous.tutor?.role || 'University Tutor',
-          university: params.university || previous.tutor?.university || 'University',
-          rating: params.rating ?? previous.tutor?.rating ?? '4.8',
-          hourlyRate: params.hourlyRate ?? params.fee ?? previous.tutor?.hourlyRate ?? 700,
-          fee: params.fee ?? params.hourlyRate ?? previous.tutor?.fee ?? 700,
-          photoUrl: params.photoUrl || previous.tutor?.photoUrl,
+          subject: params.subject || previousTutor?.subject,
+          role: params.role || previousTutor?.role || 'University Tutor',
+          university: params.university || previousTutor?.university,
+          rating: params.rating ?? previousTutor?.rating ?? 0,
+          hourlyRate: params.hourlyRate ?? params.fee ?? previousTutor?.hourlyRate ?? 700,
+          fee: params.fee ?? params.hourlyRate ?? previousTutor?.fee ?? 700,
+          photoUrl: params.photoUrl || previousTutor?.photoUrl,
         } : previous.tutor);
         return {
           ...previous,
           ...params,
+          ...(target === 'ScheduleScreen' ? { rescheduleId: params.rescheduleId ?? null } : {}),
+          tutorId: nextTutorId ?? tutorData?.id ?? (sameTutor ? previous.tutorId : null),
           tutor_name: params.tutorName || params.tutor_name || tutorData?.name || previous.tutor_name,
           tutorName: params.tutorName || params.tutor_name || tutorData?.name || previous.tutorName,
           subject: params.subject || tutorData?.subject || previous.subject,
-          tutor: tutorData ? { ...previous.tutor, ...tutorData } : previous.tutor,
+          tutor: tutorData ? { ...previousTutor, ...tutorData } : previous.tutor,
         };
       });
-      router.navigate(screenPath(target));
+      router.navigate({ pathname: '/[page]', params: { page: target, ...(params.tutorId ? { tutorId: params.tutorId } : {}) } });
     },
     goBack: () => {
       if (router.canGoBack()) router.back();
@@ -145,6 +152,7 @@ export default function App() {
   };
   if (!allScreens.includes(currentScreen)) return <Redirect href={screenPath(currentUser ? accountScreen : 'login')} />;
   if (!currentUser && !publicScreens.includes(currentScreen)) return <Redirect href={screenPath('login')} />;
+  if (currentScreen === 'ManageSessionScreen' && !isTutorUser) return <Redirect href={screenPath('SearchHomeScreen')} />;
   if (isEditCardScreen && (!currentBooking.editingCardId || currentBooking.editingCardOwner !== currentUser.id))
     return <Redirect href={screenPath('paymentHistory')} />;
   if ((isPaymentProcessing || isPaymentSuccess) && !hasPaymentReceipt) return <Redirect href={screenPath(accountScreen)} />;
@@ -239,10 +247,8 @@ export default function App() {
               navigation={navigation}
               onCreateSession={() => navigation.navigate('ManageSessionScreen')}
               onEditProfile={() => setCurrentScreen('tutorReg')}
-              onDeleteProfile={() => {
-                setCurrentUser(null);
-                setCurrentScreen('login');
-              }}
+              onDeleteProfile={handleLogout}
+              onUserChange={setCurrentUser}
               onLogout={handleLogout}
               onNavigateToPayments={() => setCurrentScreen('paymentHistory')}
             />
@@ -292,6 +298,7 @@ export default function App() {
         {currentScreen === 'SessionPreferencesScreen' && (
           <SessionPreferencesScreen
             navigation={navigation}
+            currentUser={currentUser}
             currentBooking={currentBooking}
             getCapacityForSlot={getCapacityForSlot}
           />
@@ -300,8 +307,8 @@ export default function App() {
         {currentScreen === 'BookingSummaryScreen' && (
           <BookingSummaryScreen
             navigation={navigation}
+            currentUser={currentUser}
             currentBooking={currentBooking}
-            onConfirm={handleConfirmBooking}
             onNavigateToPayment={(checkout) => navigation.navigate('payment', {
               checkout: { ...checkout, bookerName: currentUser.fullName || currentUser.name || currentUser.email },
             })}
@@ -311,6 +318,7 @@ export default function App() {
         {currentScreen === 'MyBookingsScreen' && (
           <MyBookingsScreen
             navigation={navigation}
+            currentUser={currentUser}
             myBookings={myBookings}
             onCancelBooking={handleCancelBooking}
             onCompleteBooking={handleCompleteBooking}

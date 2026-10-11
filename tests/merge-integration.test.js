@@ -75,6 +75,27 @@ test('search navigation preserves selected tutor details when opening the bookin
   assert.equal(state.currentBooking.subject, 'Physics');
 });
 
+test('changing tutors clears the previous tutor photo and rating from booking details', () => {
+  const { state, elements } = app('SearchHomeScreen', 'Student', {
+    currentBooking: { tutorId: 'old-tutor', tutor: { id: 'old-tutor', name: 'Old Tutor', rating: 5, photoUrl: 'https://example.com/old.jpg' } },
+  });
+  elements.find((element) => element.type === 'HomeScreen').props.navigation.navigate('ScheduleScreen', {
+    tutorId: 'new-tutor', tutorName: 'New Tutor', subject: 'Physics',
+  });
+  assert.equal(state.currentBooking.tutor.name, 'New Tutor');
+  assert.equal(state.currentBooking.tutor.id, 'new-tutor');
+  assert.equal(state.currentBooking.tutor.photoUrl, undefined);
+  assert.equal(state.currentBooking.tutor.rating, 0);
+});
+
+test('starting a new booking from discovery clears an earlier reschedule target', () => {
+  const { state, elements } = app('SearchHomeScreen', 'Student', { currentBooking: { rescheduleId: 'old-booking' } });
+  elements.find((element) => element.type === 'HomeScreen').props.navigation.navigate('ScheduleScreen', {
+    tutorId: 'new-tutor', tutorName: 'New Tutor',
+  });
+  assert.equal(state.currentBooking.rescheduleId, null);
+});
+
 test('the merged app routes tutors to session management and exposes payment history', () => {
   const { routes, elements } = app('tutorProfile', 'Tutor');
   const profile = elements.find(element => element.type === 'TutorProfileScreen');
@@ -96,7 +117,7 @@ test('booking checkout keeps the selected tutor and adds the signed-in booker na
   });
   const summary = load('src/screens/BookingSummaryScreen.js', (name) => {
     if (name === 'react') return {
-      __esModule: true, default: require('react'), useState: () => [false, () => {}],
+      __esModule: true, default: require('react'), useState: () => [false, () => {}], useRef: (value) => ({ current: value }),
     };
     if (name === 'react/jsx-runtime') return require(name);
     if (name === 'react-native') return new Proxy({ StyleSheet: { create: value => value } }, {

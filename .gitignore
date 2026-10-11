@@ -4,3 +4,6 @@ dist/
 web-build/
 backend/data.json
 *.log
+.codex-web-check/
+.codex-export-results
+.codex-focused-results

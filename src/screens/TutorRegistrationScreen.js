@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Image } from 'react-native';
 import { apiService } from '../services/api';
 import { tutorService } from '../services/tutorService';
@@ -15,6 +15,7 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || null);
   const [certificateDocument, setCertificateDocument] = useState(null);
   const [loading, setLoading] = useState(false);
+  const saving = useRef(false);
 
   const handlePickPhoto = async () => {
     const uri = await pickImageWithPermissions();
@@ -28,12 +29,11 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
       Alert.alert('Email Required', 'Please enter your email address first.');
       return;
     }
-    const res = await apiService.sendOtp(email);
-    if (res && res.success) {
-      if (onNavigateToVerifyOtp) {
-        onNavigateToVerifyOtp(email, res.otp);
-      }
-    }
+    try {
+      const res = await apiService.sendOtp(email);
+      if (!res?.success) throw new Error(res?.message || 'Unable to send the verification code.');
+      onNavigateToVerifyOtp?.(email, res.otp);
+    } catch (error) { Alert.alert('Verification Failed', error.message); }
   };
 
   const handleUploadCertificate = async () => {
@@ -45,11 +45,13 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
   };
 
   const handleRegister = async () => {
+    if (saving.current) return;
     if (!fullName || !email) {
       Alert.alert('Missing Fields', 'Please provide at least your Full Name and Email Address.');
       return;
     }
 
+    saving.current = true;
     setLoading(true);
     try {
       const payload = {
@@ -62,22 +64,21 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
         aboutYou,
         password,
         avatarUrl,
-        certificates: certificateDocument ? [{
-          id: 'cert_' + Date.now(),
-          title: certificateDocument.name,
-          certificateUrl: certificateDocument.uri,
-          issuingInstitute: 'Verified Document',
-          status: 'Verified',
-          uploadedAt: new Date().toISOString().split('T')[0]
-        }] : (user?.certificates || [])
+        certificates: user?.certificates || []
       };
 
-      const res = user
+      let res = user
         ? await apiService.updateProfile({ ...payload, password: undefined, email: user.email })
         : await apiService.register(payload);
-      setLoading(false);
-
       if (res && res.success) {
+        let attachmentWarning = '';
+        if (certificateDocument) {
+          const uploaded = await apiService.uploadCertificate(certificateDocument);
+          if (uploaded.success) {
+            res = { ...res, user: uploaded.user };
+            setCertificateDocument(null);
+          } else attachmentWarning = uploaded.message || 'The qualification document could not be saved.';
+        }
         const tutorPayload = {
           userId: res.user?.id || user?.id,
           name: fullName,
@@ -94,7 +95,9 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
         const tutor = existingTutor
           ? await tutorService.update(existingTutor.id, tutorPayload)
           : await tutorService.create(tutorPayload);
-        Alert.alert(user ? 'Profile Updated' : 'Welcome!', user ? 'Your profile has been saved.' : 'Tutor account created successfully.');
+        Alert.alert(user ? 'Profile Updated' : 'Welcome!', attachmentWarning
+          ? `Your account was saved. Document upload failed: ${attachmentWarning} Upload it again from your profile.`
+          : user ? 'Your profile has been saved.' : 'Tutor account created successfully.');
         if (onRegistrationSuccess) {
           onRegistrationSuccess({ ...(res.user || user), tutorId: tutor.id });
         }
@@ -102,8 +105,10 @@ export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, o
         Alert.alert('Registration Failed', res?.message || 'Error creating account');
       }
     } catch (err) {
-      setLoading(false);
       Alert.alert('Error', err.message);
+    } finally {
+      saving.current = false;
+      setLoading(false);
     }
   };
 

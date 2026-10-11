@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   View,
   Text,
@@ -8,7 +9,6 @@ import {
   StatusBar,
   TextInput,
   Switch,
-  Alert,
   Modal,
   KeyboardAvoidingView,
   Platform,
@@ -32,7 +32,7 @@ const TUTOR_LIST = [
 
 export default function ManageSessionScreen({ navigation, currentUser }) {
   const [selectedTutor, setSelectedTutor] = useState(
-    currentUser?.fullName || TUTOR_LIST[0]
+    currentUser?.fullName || currentUser?.name || currentUser?.email || TUTOR_LIST[0]
   );
   const [isTutorDropdownOpen, setIsTutorDropdownOpen] = useState(false);
 
@@ -95,64 +95,75 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
 
   // Capacity & Pricing
   const [maxCapacity, setMaxCapacity] = useState(5);
-  const [bookedCount] = useState(0);
+  const [bookedCount, setBookedCount] = useState(0);
+  const [loadResult, setLoadResult] = useState(null);
+  const [savingSession, setSavingSession] = useState(false);
+  const writing = useRef(false);
+  const checkingSlot = useRef(false);
+  const activeLoadKey = useRef(null);
+  const [addingSlot, setAddingSlot] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const [slotToRemove, setSlotToRemove] = useState(null);
+  const [retry, setRetry] = useState(0);
+  const loadKey = `${selectedTutor}:${selectedDayObj.year}:${selectedDayObj.month}:${selectedDay}:${retry}`;
+  const loadingSession = loadResult?.key !== loadKey;
+  const loadError = loadingSession ? '' : loadResult.error;
   const seatsRemaining = Math.max(0, maxCapacity - bookedCount);
   const [sessionFee, setSessionFee] = useState('700');
 
   const [isAcceptingBookings, setIsAcceptingBookings] = useState(true);
 
-  // Fetch existing configured sessions from Supabase when Tutor or Date changes
-  useEffect(() => {
-    let isMounted = true;
-    const fetchTutorExistingSession = async () => {
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    activeLoadKey.current = loadKey;
+    setFeedback(null);
+    setSlotToRemove(null);
+    setLoadResult(null);
+    setConfiguredSlots([]);
+    setBookedCount(0);
+    const load = async () => {
       try {
-        const { data, error } = await supabase
-          .from('tutor_sessions')
-          .select('*')
-          .eq('tutor_name', selectedTutor)
-          .eq('year', selectedDayObj.fullDate.getFullYear())
-          .eq('month', selectedDayObj.fullDate.getMonth() + 1)
-          .eq('date', selectedDay);
-
-        if (!error && data && data.length > 0) {
-          const session = data[0];
-          if (isMounted) {
-            setCourseTitle(session.course_title || 'Data Structures & Algorithms');
-            setCourseCode(session.course_code || 'CS204');
-            setCourseSubtitle(session.course_subtitle || 'CS204 • Active Module');
-            setSessionMode(session.mode || 'physical');
-            setVenueAddress(session.venue || 'SLIIT Malabe Campus, Block E - Lab 401');
-            setMaxCapacity(session.max_capacity || 5);
-            setSessionFee(String(session.fee || 700));
-            setIsAcceptingBookings(session.is_accepting_bookings ?? true);
-
-            if (session.slots && Array.isArray(session.slots)) {
-              const formattedSlots = session.slots.map((sText, idx) => ({
-                id: `db-slot-${idx}`,
-                time: sText,
-                period: sText.includes('AM') ? 'Morning' : 'Afternoon / Evening',
-                bookingsCount: 0,
-              }));
-              setConfiguredSlots(formattedSlots);
-            }
-          }
-        } else {
-          if (isMounted) {
-            setConfiguredSlots([]);
-          }
-        }
-      } catch (err) {
-        console.log('Error loading tutor session from DB:', err);
+        const [sessionResult, bookingsResult] = await Promise.all([
+          supabase.from('tutor_sessions').select('*').eq('tutor_name', selectedTutor)
+            .eq('year', selectedDayObj.year).eq('month', selectedDayObj.month + 1).eq('date', selectedDay),
+          supabase.from('bookings').select('slot').eq('tutor_name', selectedTutor)
+            .eq('year', selectedDayObj.year).eq('month', selectedDayObj.month + 1).eq('date', selectedDay)
+            .eq('status', 'Confirmed'),
+        ]);
+        if (sessionResult.error) throw sessionResult.error;
+        if (bookingsResult.error) throw bookingsResult.error;
+        if (!active) return;
+        const session = sessionResult.data?.[0];
+        const bookings = bookingsResult.data || [];
+        setCourseTitle(session?.course_title || 'Data Structures & Algorithms');
+        setCourseCode(session?.course_code || 'CS204');
+        setCourseSubtitle(session?.course_subtitle || 'CS204 - Active Module');
+        setSessionMode(session?.mode || 'physical');
+        setVenueAddress(session?.venue || 'SLIIT Malabe Campus, Block E - Lab 401');
+        setMaxCapacity(session?.max_capacity ?? 5);
+        setSessionFee(String(session?.fee ?? 700));
+        setIsAcceptingBookings(session?.is_accepting_bookings ?? true);
+        setBookedCount(bookings.length);
+        const slots = [...new Set((sessionResult.data || [])
+          .flatMap((row) => Array.isArray(row.slots) ? row.slots : [])
+          .filter((time) => typeof time === 'string' && time.trim())
+          .map((time) => time.trim()))];
+        setConfiguredSlots(slots.map((time) => ({
+          id: `slot-${time}`, time,
+          period: time.split(' - ')[0].includes('AM') ? 'Morning' : 'Afternoon / Evening',
+          bookingsCount: bookings.filter((booking) => booking.slot?.trim() === time).length,
+        })));
+        setLoadResult({ key: loadKey, error: '' });
+      } catch (error) {
+        if (active) setLoadResult({ key: loadKey, error: error.message || 'Unable to load this session. Please try again.' });
       }
     };
-
-    fetchTutorExistingSession();
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedTutor, selectedDay, selectedDayObj.fullDate]);
+    load();
+    return () => { active = false; activeLoadKey.current = null; };
+  }, [selectedTutor, selectedDay, selectedDayObj.year, selectedDayObj.month, loadKey]));
 
   const handleOpenCourseModal = () => {
+    setFeedback(null);
     setEditCourseTitle(courseTitle);
     setEditCourseCode(courseCode);
     setEditCourseSubtitle(courseSubtitle);
@@ -161,7 +172,7 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
 
   const handleSaveCourseModal = () => {
     if (!editCourseTitle.trim()) {
-      Alert.alert('Validation Error', 'Please enter a course title.');
+      setFeedback({ title: 'Validation Error', message: 'Please enter a course title.' });
       return;
     }
     const cleanCode = editCourseCode.trim() || 'CS204';
@@ -171,90 +182,112 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
     setCourseTitle(cleanTitle);
     setCourseCode(cleanCode);
     setCourseSubtitle(cleanSubtitle);
+    setFeedback(null);
     setIsEditCourseModalVisible(false);
   };
 
   const handleSelectNewSlot = async (slotTime) => {
+    if (loadingSession || loadError || writing.current || checkingSlot.current) return;
     const alreadyConfigured = configuredSlots.some((s) => s.time === slotTime);
     if (alreadyConfigured) {
-      Alert.alert('Slot Already Added', 'This time slot is already configured for this date.');
+      setFeedback({ title: 'Slot Already Added', message: 'This time slot is already configured for this date.' });
       return;
     }
 
-    const slotStartTime = slotTime.split(' - ')[0];
-    const conflictResult = await checkSlotConflict({
-      year: selectedDayObj.fullDate.getFullYear(),
-      month: selectedDayObj.fullDate.getMonth(),
-      date: selectedDay,
-      slot: slotStartTime,
-      currentTutorName: selectedTutor,
-    });
+    const requestKey = loadKey;
+    checkingSlot.current = true;
+    setAddingSlot(true);
+    setFeedback(null);
+    try {
+      const slotStartTime = slotTime.split(' - ')[0];
+      const conflictResult = await checkSlotConflict({
+        year: selectedDayObj.fullDate.getFullYear(),
+        month: selectedDayObj.fullDate.getMonth(),
+        date: selectedDay,
+        slot: slotStartTime,
+        currentTutorName: selectedTutor,
+      });
+      if (activeLoadKey.current !== requestKey) return;
 
-    if (conflictResult?.hasConflict) {
-      Alert.alert(
-        'Slot Conflict',
-        conflictResult.message ||
-          'Another tutor has already scheduled a session for this time slot. Please choose a different time.'
-      );
-      return;
+      if (conflictResult?.hasConflict) {
+        setFeedback({
+          title: 'Slot Conflict',
+          message: conflictResult.message ||
+            'Another tutor has already scheduled a session for this time slot. Please choose a different time.'
+        });
+        return;
+      }
+
+      const newSlot = {
+        id: `slot-${slotTime}`,
+        time: slotTime,
+        period: slotTime.includes('AM') ? 'Morning' : 'Afternoon / Evening',
+        bookingsCount: 0,
+      };
+
+      setConfiguredSlots((prev) => prev.some((slot) => slot.time === slotTime) ? prev : [...prev, newSlot]);
+      setIsAddSlotModalVisible(false);
+    } catch (error) {
+      if (activeLoadKey.current === requestKey) {
+        setFeedback({ title: 'Could Not Add Slot', message: error.message || 'Please try again.' });
+      }
+    } finally {
+      checkingSlot.current = false;
+      setAddingSlot(false);
     }
-
-    const isMorning = slotTime.includes('AM');
-    const newSlot = {
-      id: `slot-${slotTime}`,
-      time: slotTime,
-      period: isMorning ? 'Morning' : 'Afternoon / Evening',
-      bookingsCount: 0,
-    };
-
-    setConfiguredSlots((prev) => [...prev, newSlot]);
-    setIsAddSlotModalVisible(false);
   };
 
   // 💡 DATABASE SYNC: Handle deleting a configured time slot and updating Supabase immediately
   const handleDeleteSlot = (slotId) => {
-    Alert.alert(
-      'Remove Time Slot',
-      'Are you sure you want to remove this time slot? This will instantly remove it from the database and student view.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            const updatedSlots = configuredSlots.filter((s) => s.id !== slotId);
-            setConfiguredSlots(updatedSlots);
+    if (loadingSession || loadError || writing.current) return;
+    if (configuredSlots.find((slot) => slot.id === slotId)?.bookingsCount > 0) {
+      setFeedback({ title: 'Slot has bookings', message: 'Cancel or reschedule its bookings before removing this slot.' });
+      return;
+    }
+    setFeedback(null);
+    setSlotToRemove(slotId);
+  };
 
-            try {
-              const sessionData = {
-                tutorName: selectedTutor,
-                courseTitle,
-                courseCode,
-                courseSubtitle,
-                selectedDay,
-                date: selectedDay,
-                month: selectedDayObj.fullDate.getMonth() + 1,
-                year: selectedDayObj.fullDate.getFullYear(),
-                slots: updatedSlots.map((s) => s.time),
-                mode: sessionMode,
-                venue: sessionMode === 'physical' ? venueAddress : 'Online Zoom/Meet',
-                maxCapacity,
-                fee: Number(sessionFee) || 700,
-                isAcceptingBookings: updatedSlots.length > 0 ? isAcceptingBookings : false,
-              };
-              await saveTutorSessionToDb(sessionData);
-            } catch (err) {
-              console.error('Error updating DB on slot delete:', err);
-              Alert.alert('Update Failed', 'Could not update database after deleting slot.');
-            }
-          },
-        },
-      ]
-    );
+  const confirmRemoveSlot = async () => {
+    const slotId = slotToRemove;
+    if (!slotId || loadingSession || loadError || checkingSlot.current || writing.current) return;
+    const updatedSlots = configuredSlots.filter((s) => s.id !== slotId);
+    setSlotToRemove(null);
+    writing.current = true;
+    setSavingSession(true);
+    setFeedback(null);
+    try {
+      const sessionData = {
+        tutorName: selectedTutor,
+        courseTitle,
+        courseCode,
+        courseSubtitle,
+        selectedDay,
+        date: selectedDay,
+        month: selectedDayObj.fullDate.getMonth() + 1,
+        year: selectedDayObj.fullDate.getFullYear(),
+        slots: updatedSlots.map((s) => s.time),
+        mode: sessionMode,
+        venue: sessionMode === 'physical' ? venueAddress : 'Online Zoom/Meet',
+        maxCapacity,
+        fee: Number(sessionFee) || 700,
+        isAcceptingBookings: updatedSlots.length > 0 ? isAcceptingBookings : false,
+      };
+      await saveTutorSessionToDb(sessionData);
+      setConfiguredSlots(updatedSlots);
+      if (!updatedSlots.length) setIsAcceptingBookings(false);
+      setFeedback({ title: 'Slot Removed', message: 'Your session has been updated.', success: true });
+    } catch (err) {
+      console.error('Error updating DB on slot delete:', err);
+      setFeedback({ title: 'Update Failed', message: err.message || 'Could not remove this slot. Please try again.' });
+    } finally {
+      writing.current = false;
+      setSavingSession(false);
+    }
   };
 
   const handleDecreaseCapacity = () => {
-    if (maxCapacity > 1) setMaxCapacity(maxCapacity - 1);
+    if (maxCapacity > Math.max(1, ...configuredSlots.map((slot) => slot.bookingsCount))) setMaxCapacity(maxCapacity - 1);
   };
 
   const handleIncreaseCapacity = () => {
@@ -262,8 +295,17 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
   };
 
   const handleSaveSession = async () => {
+    if (loadingSession || loadError || writing.current || checkingSlot.current) return;
+    if (!Number.isFinite(Number(sessionFee)) || Number(sessionFee) <= 0) {
+      setFeedback({ title: 'Invalid Fee', message: 'Enter a session fee greater than zero.' });
+      return;
+    }
+    if (sessionMode === 'physical' && !venueAddress.trim()) {
+      setFeedback({ title: 'Venue Required', message: 'Enter the address for your physical session.' });
+      return;
+    }
     if (configuredSlots.length === 0) {
-      Alert.alert('Slot Required', 'Please configure at least one time slot.');
+      setFeedback({ title: 'Slot Required', message: 'Please configure at least one time slot.' });
       return;
     }
 
@@ -284,20 +326,26 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
       isAcceptingBookings,
     };
 
+    writing.current = true;
+    setSavingSession(true);
+    setFeedback(null);
     try {
       await saveTutorSessionToDb(sessionData);
-      Alert.alert(
-        'Session Published ✅',
-        `Session configurations for ${selectedTutor} on date ${selectedDay} have been successfully saved to Supabase!`
-      );
+      setFeedback({ title: 'Session Saved', message: `Your session for ${selectedDay} ${displayMonthYear} has been updated.`, success: true });
     } catch (e) {
       console.error('Save session error:', e);
-      Alert.alert(
-        'Save Failed',
-        e?.message || 'Could not save tutor session to the database. Please try again.'
-      );
+      setFeedback({ title: 'Save Failed', message: e?.message || 'Could not save your session. Please try again.' });
+    } finally {
+      writing.current = false;
+      setSavingSession(false);
     }
   };
+
+  const feedbackNotice = feedback && (
+    <View style={[styles.feedbackNotice, feedback.success && styles.feedbackSuccess]}>
+      <Text accessibilityRole="alert" style={styles.feedbackText}>{feedback.title}: {feedback.message}</Text>
+    </View>
+  );
 
   return (
     <View style={styles.safeArea}>
@@ -324,12 +372,17 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {loadingSession && <Text style={styles.courseSubtitle}>Loading session...</Text>}
+        {!!loadError && <View><Text accessibilityRole="alert">{loadError}</Text>
+          <TouchableOpacity onPress={() => setRetry((value) => value + 1)}><Text>Retry</Text></TouchableOpacity></View>}
+
         
         {/* Tutor Selector Dropdown Bar */}
         <View style={styles.tutorSelectorWrapper}>
           <Text style={styles.tutorSelectLabel}>SELECT TUTOR:</Text>
           <TouchableOpacity
             style={styles.tutorDropdownBtn}
+            disabled={!!currentUser || loadingSession || savingSession}
             onPress={() => setIsTutorDropdownOpen(!isTutorDropdownOpen)}
             activeOpacity={0.8}
           >
@@ -398,6 +451,7 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
               <TouchableOpacity
                 key={`${item.date}-${item.month}`}
                 style={[styles.datePill, isSelected && styles.datePillSelected]}
+                disabled={savingSession}
                 onPress={() => setSelectedDay(item.date)}
                 activeOpacity={0.8}
               >
@@ -438,7 +492,8 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
 
         <TouchableOpacity
           style={styles.addSlotDashedBtn}
-          onPress={() => setIsAddSlotModalVisible(true)}
+          disabled={loadingSession || !!loadError || savingSession || addingSlot}
+          onPress={() => { setFeedback(null); setIsAddSlotModalVisible(true); }}
           activeOpacity={0.7}
         >
           <Ionicons name="add" size={18} color="#4B5563" style={{ marginRight: 4 }} />
@@ -558,14 +613,16 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
         </View>
 
         {/* Bottom Action Buttons */}
-        <TouchableOpacity style={styles.saveSessionBtn} onPress={handleSaveSession} activeOpacity={0.85}>
+        {feedbackNotice}
+        {!!loadError && <Text accessibilityRole="alert" style={styles.feedbackText}>Cannot save until the session loads. Use Retry above.</Text>}
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Save & Update Session" style={[styles.saveSessionBtn, (loadingSession || !!loadError || savingSession || addingSlot) && { opacity: 0.5 }]} disabled={loadingSession || !!loadError || savingSession || addingSlot} onPress={handleSaveSession} activeOpacity={0.85}>
           <Ionicons name="checkmark" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-          <Text style={styles.saveSessionBtnText}>Save & Update Session</Text>
+          <Text style={styles.saveSessionBtnText}>{savingSession ? 'Saving...' : loadingSession ? 'Loading Session...' : addingSlot ? 'Checking Slot...' : 'Save & Update Session'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.previewStudentBtn}
-          onPress={() => navigation?.navigate('ScheduleScreen', { preview: true })}
+          onPress={() => navigation?.navigate('ScheduleScreen', { preview: true, tutorName: selectedTutor, tutorId: currentUser?.tutorId || null, subject: courseTitle, fee: Number(sessionFee), year: selectedDayObj.year, month: selectedDayObj.month, date: selectedDay, rescheduleId: null })}
           activeOpacity={0.8}
         >
           <Text style={styles.previewStudentBtnText}>Preview Student View</Text>
@@ -573,7 +630,7 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
       </ScrollView>
 
       {/* Edit Course Modal */}
-      <Modal visible={isEditCourseModalVisible} transparent animationType="fade">
+      <Modal visible={isEditCourseModalVisible} transparent animationType="fade" onRequestClose={() => setIsEditCourseModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeaderRow}>
@@ -602,6 +659,7 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
               </View>
             </ScrollView>
 
+            {feedbackNotice}
             <View style={styles.modalBtnRow}>
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setIsEditCourseModalVisible(false)} activeOpacity={0.8}>
                 <Text style={styles.modalCancelBtnText}>Cancel</Text>
@@ -616,7 +674,7 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
       </Modal>
 
       {/* Add Slot Modal */}
-      <Modal visible={isAddSlotModalVisible} transparent animationType="fade">
+      <Modal visible={isAddSlotModalVisible} transparent animationType="fade" onRequestClose={() => setIsAddSlotModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeaderRow}>
@@ -626,10 +684,12 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
               </TouchableOpacity>
             </View>
             <Text style={styles.modalSubtitle}>Date: {selectedDay} {displayMonthYear}</Text>
+            {feedbackNotice}
+            {addingSlot && <Text style={styles.modalSubtitle}>Checking availability...</Text>}
 
             <ScrollView style={{ maxHeight: 280, marginTop: 10 }}>
               {availableSlotOptions.map((opt) => (
-                <TouchableOpacity key={opt} style={styles.slotOptionRow} onPress={() => handleSelectNewSlot(opt)}>
+                <TouchableOpacity key={opt} disabled={addingSlot} style={styles.slotOptionRow} onPress={() => handleSelectNewSlot(opt)}>
                   <Text style={styles.slotOptionText}>{opt}</Text>
                   <Ionicons name="add-circle-outline" size={20} color="#6A1B9A" />
                 </TouchableOpacity>
@@ -638,8 +698,22 @@ export default function ManageSessionScreen({ navigation, currentUser }) {
           </View>
         </View>
       </Modal>
-
-
+      <Modal visible={!!slotToRemove} transparent animationType="fade" onRequestClose={() => setSlotToRemove(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Remove Time Slot</Text>
+            <Text style={styles.modalSubtitle}>Remove this time slot from your session and student view?</Text>
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setSlotToRemove(null)}>
+                <Text style={styles.modalCancelBtnText}>Keep Slot</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalSaveBtn} onPress={confirmRemoveSlot}>
+                <Text style={styles.modalSaveBtnText}>Remove Slot</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -977,6 +1051,9 @@ const styles = StyleSheet.create({
     marginTop: 22,
   },
   saveSessionBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  feedbackNotice: { marginTop: 12, padding: 12, borderRadius: 10, backgroundColor: '#FEF2F2' },
+  feedbackSuccess: { backgroundColor: '#DCFCE7' },
+  feedbackText: { fontSize: 13, color: '#111827' },
   previewStudentBtn: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,

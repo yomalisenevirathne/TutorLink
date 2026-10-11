@@ -15,6 +15,7 @@ import { cancelBookingInDb, completeBookingInDb, deleteBookingFromDb } from '../
 
 export default function MyBookingsScreen({
   navigation,
+  currentUser,
   myBookings: propBookings,
   onCancelBooking,
   onCompleteBooking,
@@ -27,7 +28,7 @@ export default function MyBookingsScreen({
 
   // Dynamic Categorization
   const upcomingBookings = bookings.filter((item) => item.status === 'Confirmed');
-  const pastBookings = bookings.filter((item) => item.status === 'Completed');
+  const pastBookings = bookings.filter((item) => ['Completed', 'Cancelled'].includes(item.status));
 
   const monthNames = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -56,7 +57,7 @@ export default function MyBookingsScreen({
           text: 'Yes, Cancel',
           style: 'destructive',
           onPress: async () => {
-            const result = await cancelBookingInDb(id);
+            const result = await cancelBookingInDb(id, currentUser);
             if (!result.success) {
               Alert.alert('Unable to cancel', result.error?.message || 'Please try again.');
               return;
@@ -80,7 +81,7 @@ export default function MyBookingsScreen({
       completing.current = true;
       setCompletingId(id);
       try {
-        const result = await completeBookingInDb(id);
+        const result = await completeBookingInDb(id, currentUser);
         if (!result.success) {
           const errorMessage = result.error?.message || 'Please try again.';
           if (Platform.OS === 'web') window.alert(`Unable to complete: ${errorMessage}`);
@@ -122,7 +123,7 @@ export default function MyBookingsScreen({
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const result = await deleteBookingFromDb(id);
+            const result = await deleteBookingFromDb(id, currentUser);
             if (!result.success) {
               Alert.alert('Unable to delete', result.error?.message || 'Please try again.');
               return;
@@ -137,9 +138,9 @@ export default function MyBookingsScreen({
     );
   };
 
-  const handleReschedule = (item) => {
+  const handleReschedule = (item, bookAgain = false) => {
     navigation?.navigate('ScheduleScreen', {
-      rescheduleId: item.id,
+      rescheduleId: bookAgain ? null : item.id,
       tutorName: item.tutor_name || item.tutorName,
       tutorId: item.discovery_tutor_id || null,
       subject: item.subject,
@@ -170,7 +171,7 @@ export default function MyBookingsScreen({
           <TouchableOpacity style={{ marginRight: 14 }}>
             <Ionicons name="notifications" size={22} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation?.navigate('studentProfile')}>
+          <TouchableOpacity onPress={() => navigation?.navigate(String(currentUser?.role).toLowerCase() === 'tutor' ? 'tutorProfile' : 'studentProfile')}>
             <Ionicons name="person-circle" size={26} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -298,7 +299,7 @@ export default function MyBookingsScreen({
                     <Text style={styles.tutorSubject}>{item.subject || 'Data Structures & Algorithms'}</Text>
                   </View>
                   <View style={styles.completedBadge}>
-                    <Text style={styles.completedBadgeText}>Completed</Text>
+                    <Text style={styles.completedBadgeText}>{item.status}</Text>
                   </View>
                 </View>
 
@@ -338,7 +339,7 @@ export default function MyBookingsScreen({
 
                   <TouchableOpacity
                     style={styles.bookAgainBtn}
-                    onPress={() => handleReschedule(item)}
+                    onPress={() => handleReschedule(item, true)}
                     activeOpacity={0.8}
                   >
                     <Text style={styles.bookAgainBtnText}>Book Again</Text>
@@ -370,7 +371,7 @@ export default function MyBookingsScreen({
 
               <TouchableOpacity
                 style={styles.backHomeBtn}
-                onPress={() => navigation?.navigate('ScheduleScreen')}
+                onPress={() => navigation?.navigate('SearchHomeScreen')}
                 activeOpacity={0.8}
               >
                 <Text style={styles.backHomeBtnText}>Back to Home</Text>

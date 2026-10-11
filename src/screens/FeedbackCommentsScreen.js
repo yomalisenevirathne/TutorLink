@@ -45,6 +45,7 @@ function TutorComments({ tutor, user }) {
     setPendingDelete(comment);
   };
   const confirmDelete = async () => {
+    if (!pendingDelete || feedback.busy) return;
     const removed = await feedback.deleteComment(pendingDelete.id);
     if (removed) {
       if (editingComment?.id === pendingDelete.id || editingComment?.parentId === pendingDelete.id) setEditingComment(null);
@@ -102,15 +103,17 @@ function TutorComments({ tutor, user }) {
 
 export default function FeedbackCommentsScreen({ tutorId, user, onBack }) {
   const insets = useSafeAreaInsets();
-  const [tutor, setTutor] = useState(null);
-  const [error, setError] = useState('');
+  const [result, setResult] = useState(null);
   const [attempt, setAttempt] = useState(0);
+  const currentResult = result?.tutorId === tutorId && result?.attempt === attempt ? result : null;
+  const tutor = currentResult?.tutor;
+  const error = currentResult?.error || '';
   useEffect(() => {
     const controller = new AbortController();
     fetchFeedbackTutor(tutorId, controller.signal).then((record) => {
-      if (!controller.signal.aborted) setTutor(record);
+      if (!controller.signal.aborted) setResult({ tutorId, attempt, tutor: record });
     }).catch((failure) => {
-      if (!controller.signal.aborted) setError(feedbackErrorMessage(failure));
+      if (!controller.signal.aborted) setResult({ tutorId, attempt, error: feedbackErrorMessage(failure) });
     });
     return () => controller.abort();
   }, [tutorId, attempt]);
@@ -127,7 +130,7 @@ export default function FeedbackCommentsScreen({ tutorId, user, onBack }) {
     {tutor ? <TutorComments key={tutor.id} tutor={tutor} user={user} /> : <View style={[feedbackStyles.state, { flex: 1 }]}>
       {error ? <>
         <Text style={feedbackStyles.stateText} accessibilityRole="alert">{error}</Text>
-        <TouchableOpacity style={feedbackStyles.retry} onPress={() => { setError(''); setAttempt((previous) => previous + 1); }} accessibilityRole="button">
+        <TouchableOpacity style={feedbackStyles.retry} onPress={() => setAttempt((previous) => previous + 1)} accessibilityRole="button">
           <Text style={feedbackStyles.linkText}>Retry</Text>
         </TouchableOpacity>
       </> : <><ActivityIndicator color="#6500FF" /><Text style={feedbackStyles.stateText}>Loading tutor...</Text></>}

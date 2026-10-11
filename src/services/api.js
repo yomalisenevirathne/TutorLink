@@ -1,11 +1,14 @@
 import { supabase } from '../utils/supabase';
 import { Platform } from 'react-native';
+import { uploadQualificationDocument } from './qualificationDocuments';
 
 // Frontend API client service for TutorLink Scope 3 Backend & Supabase Integration
 const defaultApiBaseUrl = Platform.OS === 'android'
   ? 'http://192.168.1.6:5000/api'
   : 'http://localhost:5000/api';
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || defaultApiBaseUrl;
+const allowDemoAuth = process.env.EXPO_PUBLIC_ENABLE_DEMO_AUTH === 'true';
+const otpProviders = new Map();
 
 // Export Supabase client for direct usage across components
 export { supabase };
@@ -59,9 +62,9 @@ function appUserFromSupabase(user, details = {}) {
     aboutYou: details.aboutYou || metadata.aboutYou || '',
     avatarUrl: details.avatarUrl || metadata.avatarUrl || null,
     isEmailVerified: Boolean(user.email_confirmed_at),
-    certificates: details.certificates || [],
+    certificates: details.certificates ?? metadata.certificates ?? [],
     paymentMethods: [],
-    preferences: { notifications: true, privacy: false },
+    preferences: details.preferences ?? metadata.preferences ?? { notifications: true, privacy: false },
     privacyEnabled: false,
   };
 }
@@ -106,81 +109,51 @@ export const apiService = {
     }
   },
 
-  // 1. Send OTP
   sendOtp: async (email) => {
-    // Attempt Supabase OTP send first
+    const address = String(email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) return { success: false, message: 'Enter a valid email address.' };
     try {
-      const { error } = await supabase.auth.signInWithOtp({ email });
+      const { error } = await supabase.auth.signInWithOtp({ email: address });
       if (!error) {
-        return {
-          success: true,
-          message: `OTP sent via Supabase to ${email}.`,
-          otp: '123456'
-        };
+        otpProviders.set(address, 'supabase');
+        return { success: true, message: `OTP sent to ${address}.` };
       }
-    } catch (err) {
-      console.log('[Supabase Auth] OTP error:', err.message);
+      if (!allowDemoAuth) return { success: false, message: error.message || 'Unable to send the code.' };
+    } catch (error) {
+      if (!allowDemoAuth) return { success: false, message: error.message || 'Unable to send the code. Please try again.' };
     }
-
-    const liveResult = await fetchWithFallback('/auth/send-otp', {
-      method: 'POST',
-      body: JSON.stringify({ email })
-    });
-    if (liveResult) return liveResult;
-
-    const mockCode = '123456';
-    mockState.mockOtps[email.toLowerCase()] = mockCode;
-    return {
-      success: true,
-      message: `OTP sent successfully to ${email}. (Demo Code: 123456)`,
-      otp: mockCode
-    };
+    otpProviders.set(address, 'demo');
+    mockState.mockOtps[address] = { code: '123456', expiresAt: Date.now() + 10 * 60 * 1000 };
+    return { success: true, message: 'Demo verification code created.', otp: '123456' };
   },
 
-  // 2. Verify OTP
   verifyOtp: async (email, otp) => {
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email,
-        token: otp,
-        type: 'email'
-      });
-      if (!error && data?.user) {
-        if (mockState.currentUser) mockState.currentUser.isEmailVerified = true;
-        return { success: true, message: 'Email verified via Supabase!' };
+    const address = String(email || '').trim().toLowerCase();
+    const code = String(otp || '').trim();
+    if (!/^\d{6}$/.test(code)) return { success: false, message: 'Enter all six digits.' };
+    const provider = otpProviders.get(address);
+    if (provider === 'demo' && allowDemoAuth) {
+      const expected = mockState.mockOtps[address];
+      if (!expected || Date.now() > expected.expiresAt || code !== expected.code)
+        return { success: false, message: 'Invalid or expired code. Request a new code.' };
+      delete mockState.mockOtps[address];
+    } else if (provider === 'supabase') {
+      try {
+        const { data, error } = await supabase.auth.verifyOtp({ email: address, token: code, type: 'email' });
+        if (error || !data?.user) return { success: false, message: error?.message || 'Invalid or expired code.' };
+      } catch (error) {
+        return { success: false, message: error.message || 'Unable to verify the code. Please try again.' };
       }
-    } catch (err) {
-      console.log('[Supabase Auth] Verify OTP error:', err.message);
-    }
-
-    const liveResult = await fetchWithFallback('/auth/verify-otp', {
-      method: 'POST',
-      body: JSON.stringify({ email, otp })
-    });
-    if (liveResult) return liveResult;
-
-    const expectedCode = mockState.mockOtps[email.toLowerCase()] || '123456';
-    if (otp.toString().trim() === expectedCode) {
-      if (mockState.currentUser) {
-        mockState.currentUser.isEmailVerified = true;
-      }
-      return { success: true, message: 'Email verified successfully!' };
-    }
-    return { success: false, message: 'Invalid OTP code. Please use 123456 for demo.' };
+    } else return { success: false, message: 'Request a new verification code first.' };
+    otpProviders.delete(address);
+    if (mockState.currentUser?.email?.toLowerCase() === address) mockState.currentUser.isEmailVerified = true;
+    return { success: true, message: 'Email verified successfully.' };
   },
 
   // Return the Supabase identity/session used by protected database queries.
   register: async (registrationData) => {
-    const liveResult = await fetchWithFallback('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(registrationData)
-    });
-    if (liveResult) {
-      mockState.token = liveResult.token;
-      mockState.currentUser = liveResult.user;
-      return liveResult;
-    }
-
+    // Registration and login must use the same identity provider. The separate
+    // file-based REST server cannot issue Supabase sessions for booking queries.
     try {
       const { data, error } = await supabase.auth.signUp({
         email: registrationData.email.trim(),
@@ -276,7 +249,10 @@ export const apiService = {
         email: email.trim(),
         password
       });
-      if (error || !data?.user || !data?.session) return enterDemoAccount(email);
+      if (error || !data?.user || !data?.session) {
+        if (allowDemoAuth) return enterDemoAccount(email);
+        return { success: false, message: error?.message || 'Unable to sign in. Check your email and password.' };
+      }
       let user = appUserFromSupabase(data.user);
       try {
         const { data: profile, error: profileError } = await supabase
@@ -303,7 +279,7 @@ export const apiService = {
             phoneNumber: profile.phone_number || '',
             avatarUrl: profile.avatar_url,
             aboutYou: profile.about_you || '',
-            isEmailVerified: profile.is_email_verified,
+            isEmailVerified: Boolean(data.user.email_confirmed_at) || Boolean(profile.is_email_verified),
             subjects: roleProfile?.subjects || [],
             experienceLevel: roleProfile?.experience_level || ''
           };
@@ -312,18 +288,29 @@ export const apiService = {
         // Keep the verified identity if profile tables are temporarily unavailable.
         console.warn('[Supabase Profile] Unable to load profile:', profileFailure.message);
       }
+      try {
+        if (user.role === 'Tutor') {
+          const certificates = await supabase.from('tutor_certificates').select('*').eq('tutor_id', data.user.id);
+          if (!certificates.error) user.certificates = (certificates.data || []).map((certificate) => ({
+            id: certificate.id, title: certificate.title, certificateUrl: certificate.certificate_url,
+            issuingInstitute: certificate.issuing_institute, status: certificate.status, uploadedAt: certificate.uploaded_at,
+          }));
+        }
+      } catch (error) { console.warn('Unable to load certificates:', error.message); }
       mockState.token = data.session.access_token;
       mockState.currentUser = user;
       return { success: true, message: 'Login successful.', token: mockState.token, user };
     } catch (err) {
-      console.log('[Supabase Auth] Login fallback:', err.message);
-      return enterDemoAccount(email);
+      if (allowDemoAuth) return enterDemoAccount(email);
+      return { success: false, message: err.message || 'Unable to sign in. Please try again.' };
     }
   },
 
   logout: async () => {
     mockState.token = null;
     mockState.currentUser = null;
+    otpProviders.clear();
+    mockState.mockOtps = {};
     try {
       await supabase.auth.signOut();
     } catch (_err) {
@@ -342,6 +329,25 @@ export const apiService = {
     if (!mockState.currentUser) return { success: false, message: 'Please log in before editing your profile.' };
     if (!mockState.currentUser.isDemo) {
       const { password: _password, email: _email, ...metadata } = updateData;
+      const previous = mockState.currentUser;
+      const profileChanges = {
+        ...(metadata.fullName !== undefined ? { full_name: metadata.fullName } : {}),
+        ...(metadata.phoneNumber !== undefined ? { phone_number: metadata.phoneNumber } : {}),
+        ...(metadata.address !== undefined ? { address: metadata.address } : {}),
+        ...(metadata.avatarUrl !== undefined ? { avatar_url: metadata.avatarUrl } : {}),
+        ...(metadata.aboutYou !== undefined ? { about_you: metadata.aboutYou } : {}),
+      };
+      if (Object.keys(profileChanges).length) {
+        const result = await supabase.from('profiles').update(profileChanges).eq('id', previous.id).select('id');
+        if (result.error || !result.data?.length) return { success: false, message: result.error?.message || 'Your profile could not be saved.' };
+      }
+      if (metadata.subjects !== undefined || metadata.experienceLevel !== undefined) {
+        const table = previous.role === 'Tutor' ? 'tutor_profiles' : 'student_profiles';
+        const roleChanges = { ...(metadata.subjects !== undefined ? { subjects: metadata.subjects } : {}),
+          ...(previous.role === 'Tutor' && metadata.experienceLevel !== undefined ? { experience_level: metadata.experienceLevel } : {}) };
+        const result = await supabase.from(table).update(roleChanges).eq('user_id', previous.id).select('user_id');
+        if (result.error || !result.data?.length) return { success: false, message: result.error?.message || 'Your subject details could not be saved.' };
+      }
       const { data, error } = await supabase.auth.updateUser({ data: metadata });
       if (error) return { success: false, message: error.message };
       if (!data?.user) return { success: false, message: 'Unable to save your profile.' };
@@ -365,32 +371,25 @@ export const apiService = {
     };
   },
 
-  uploadCertificate: async (title, issuingInstitute, certificateUrl) => {
-    const liveResult = await fetchWithFallback('/profile/upload-certificate', {
-      method: 'POST',
-      body: JSON.stringify({ title, issuingInstitute, certificateUrl })
-    });
-    if (liveResult) {
-      mockState.currentUser = liveResult.user;
-      return liveResult;
+  uploadCertificate: async (document, issuingInstitute = 'Uploaded Document') => {
+    const user = mockState.currentUser;
+    if (!user || user.isDemo) return { success: false, message: 'Sign in with your tutor account to upload documents.' };
+    let uploaded;
+    try {
+      uploaded = await uploadQualificationDocument(user.id, document);
+      const { data, error } = await supabase.from('tutor_certificates').insert({
+        tutor_id: user.id, title: document.name, issuing_institute: issuingInstitute,
+        certificate_url: uploaded.path, status: 'Pending',
+      }).select().single();
+      if (error) throw error;
+      if (!data?.id) throw new Error('Your document details could not be saved.');
+      const certificate = { id: data.id, title: data.title, certificateUrl: data.certificate_url,
+        issuingInstitute: data.issuing_institute, status: data.status, uploadedAt: data.uploaded_at };
+      mockState.currentUser = { ...user, certificates: [...(user.certificates || []), certificate] };
+      return { success: true, certificate, user: mockState.currentUser };
+    } catch (error) {
+      if (uploaded) await supabase.storage.from(uploaded.bucket).remove([uploaded.path]).catch(() => {});
+      return { success: false, message: error.message || 'Unable to upload the document.' };
     }
-
-    const newCert = {
-      id: 'cert_' + Date.now(),
-      title: title || 'Teaching Qualification Certificate',
-      issuingInstitute: issuingInstitute || 'University / Board',
-      certificateUrl: certificateUrl || 'https://via.placeholder.com/300x200?text=Certificate',
-      status: 'Verified',
-      uploadedAt: new Date().toISOString().split('T')[0]
-    };
-
-    mockState.currentUser.certificates = [...(mockState.currentUser.certificates || []), newCert];
-
-    return {
-      success: true,
-      message: 'Certificate uploaded and verified successfully!',
-      certificate: newCert,
-      user: mockState.currentUser
-    };
   }
 };

@@ -34,7 +34,7 @@ export default function BottomTabBar({ currentScreen, navigation, accountScreen 
       iconOutline: 'calendar-outline',
       iconFilled: 'calendar',
       target: accountScreen === 'tutorProfile' ? 'ManageSessionScreen' : 'ScheduleScreen',
-      isActive: ['ScheduleScreen', 'MyBookingsScreen', 'SessionPreferencesScreen', 'BookingSummaryScreen', 'ManageSessionScreen'].includes(currentScreen),
+      isActive: ['ScheduleScreen', 'SessionPreferencesScreen', 'BookingSummaryScreen', 'ManageSessionScreen'].includes(currentScreen),
     },
     {
       name: 'My Bookings',

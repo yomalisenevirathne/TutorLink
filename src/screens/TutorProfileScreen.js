@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { apiService } from '../services/api';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Switch, ScrollView, Alert } from 'react-native';
 import { pickQualificationDocument } from '../utils/mediaPicker';
 import { tutorService } from '../services/tutorService';
 
-export default function TutorProfileScreen({ user, onEditProfile, onCreateSession, onNavigateToBookings, onLogout, onDeleteProfile, onNavigateToPayments, navigation }) {
+export default function TutorProfileScreen({ user, onEditProfile, onCreateSession, onNavigateToBookings, onLogout, onDeleteProfile, onNavigateToPayments, onUserChange, navigation }) {
   const [notifications, setNotifications] = useState(user?.preferences?.notifications ?? true);
   const [privacy, setPrivacy] = useState(user?.preferences?.privacy ?? false);
 
@@ -13,21 +14,37 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
   const address = user?.address || 'Address not specified';
   const bio = user?.aboutYou || 'No bio provided.';
   const avatarUrl = user?.avatarUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80';
-  const [certificatesList, setCertificatesList] = useState(user?.certificates || []);
+  const certificatesList = user?.certificates || [];
+  const profileBusy = useRef(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  const savePreference = async (field, value) => {
+    if (profileBusy.current) return;
+    profileBusy.current = true;
+    setSavingProfile(true);
+    try {
+      const result = await apiService.updateProfile({ preferences: { ...user?.preferences, [field]: value } });
+      if (!result.success) throw new Error(result.message || 'Unable to save preferences.');
+      if (field === 'notifications') setNotifications(value);
+      else setPrivacy(value);
+      onUserChange?.(result.user);
+    } catch (error) { Alert.alert('Save Failed', error.message); }
+    finally { profileBusy.current = false; setSavingProfile(false); }
+  };
 
   const handleUploadNewCert = async () => {
-    const doc = await pickQualificationDocument();
-    if (doc) {
-      const newCert = {
-        id: 'cert_' + Date.now(),
-        title: doc.name,
-        certificateUrl: doc.uri,
-        issuingInstitute: 'Uploaded Document',
-        status: 'Verified'
-      };
-      setCertificatesList(prev => [...prev, newCert]);
-      Alert.alert('Certificate Attached 📄', `Document "${doc.name}" uploaded successfully.`);
-    }
+    if (profileBusy.current) return;
+    profileBusy.current = true;
+    setSavingProfile(true);
+    try {
+      const doc = await pickQualificationDocument();
+      if (!doc) return;
+      const result = await apiService.uploadCertificate(doc);
+      if (!result.success) throw new Error(result.message || 'Unable to save the document.');
+      onUserChange?.(result.user);
+      Alert.alert('Document Uploaded', `Document "${doc.name}" was saved and is pending verification.`);
+    } catch (error) { Alert.alert('Upload Failed', error.message); }
+    finally { profileBusy.current = false; setSavingProfile(false); }
   };
 
   const handleLogoutPress = () => {
@@ -127,8 +144,8 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
         {/* Verified Qualifications / Certificates */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>Verified Qualifications</Text>
-            <TouchableOpacity style={styles.linkMethodBtn} onPress={handleUploadNewCert}>
+            <Text style={styles.cardTitle}>Qualifications</Text>
+            <TouchableOpacity style={styles.linkMethodBtn} onPress={handleUploadNewCert} disabled={savingProfile}>
               <Text style={styles.linkMethodText}>+ Upload Document</Text>
             </TouchableOpacity>
           </View>
@@ -140,10 +157,10 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
                 <Text style={styles.certIcon}>🎓</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.certTitleText}>{cert.title}</Text>
-                  <Text style={styles.certSubText}>{cert.issuingInstitute || 'Verified Document'}</Text>
+                  <Text style={styles.certSubText}>{cert.issuingInstitute || 'Uploaded Document'}</Text>
                 </View>
                 <View style={styles.statusBadge}>
-                  <Text style={styles.statusBadgeText}>Verified ✅</Text>
+                  <Text style={styles.statusBadgeText}>{cert.status || 'Pending'}</Text>
                 </View>
               </View>
             ))
@@ -154,18 +171,18 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>Payment Methods</Text>
-            <TouchableOpacity style={styles.linkMethodBtn} onPress={() => Alert.alert('Payment Method', 'Link payment method modal opened.')}>
+            <TouchableOpacity style={styles.linkMethodBtn} onPress={() => navigation?.navigate('addCard', { addCardReturnTo: 'managePayments' })}>
               <Text style={styles.linkMethodText}>Link New Method</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.paymentCardBox}>
+          <TouchableOpacity style={styles.paymentCardBox} onPress={() => navigation?.navigate('managePayments')}>
             <Text style={styles.paymentCardIcon}>💳</Text>
-            <Text style={styles.paymentCardText}>Visa ending in 4321</Text>
-          </View>
+            <Text style={styles.paymentCardText}>Manage your saved payment methods</Text>
+          </TouchableOpacity>
 
           <View style={styles.actionButtonsRow}>
-            <TouchableOpacity style={styles.smallPillBtn} onPress={() => Alert.alert('Feedback', 'Feedback section')}>
+            <TouchableOpacity style={styles.smallPillBtn} onPress={() => navigation?.navigate(user?.tutorId ? 'feedbackComments' : 'testingfeedback', { tutorId: user?.tutorId })}>
               <Text style={styles.smallPillBtnText}>Feedback</Text>
             </TouchableOpacity>
 
@@ -183,7 +200,8 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
             <Text style={styles.settingLabel}>Notifications</Text>
             <Switch
               value={notifications}
-              onValueChange={setNotifications}
+              disabled={savingProfile}
+              onValueChange={(value) => savePreference('notifications', value)}
               trackColor={{ false: '#CBD5E1', true: '#7C3AED' }}
               thumbColor={notifications ? '#FFFFFF' : '#F1F5F9'}
             />
@@ -193,7 +211,8 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
             <Text style={styles.settingLabel}>Privacy</Text>
             <Switch
               value={privacy}
-              onValueChange={setPrivacy}
+              disabled={savingProfile}
+              onValueChange={(value) => savePreference('privacy', value)}
               trackColor={{ false: '#CBD5E1', true: '#7C3AED' }}
               thumbColor={privacy ? '#FFFFFF' : '#F1F5F9'}
             />

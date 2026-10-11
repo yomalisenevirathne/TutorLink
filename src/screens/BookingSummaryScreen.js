@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,17 +11,15 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { createBookingInDb } from '../bookingService';
-import BookingSuccessModal from '../components/BookingSuccessModal';
 
 export default function BookingSummaryScreen({
   navigation,
   currentBooking,
+  currentUser,
   groupPlans,
-  onConfirm,
   onNavigateToPayment,
 }) {
-  const [isSuccessModalVisible, setIsSuccessModalVisible] = useState(false);
+  const submitting = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Dynamic Tutor Data from Search / Discovery Selection
@@ -37,14 +35,14 @@ export default function BookingSummaryScreen({
     (currentBooking?.tutor?.yearOfStudy ? `Year ${currentBooking?.tutor?.yearOfStudy} Student` : 'University Tutor');
 
   const tutorRating =
-    currentBooking?.tutor?.rating ||
-    currentBooking?.tutor?.avgRating ||
-    '4.9';
+    currentBooking?.tutor?.rating ??
+    currentBooking?.tutor?.avgRating ??
+    0;
 
   const tutorReviews =
-    currentBooking?.tutor?.reviewCount ||
-    currentBooking?.tutor?.reviewsCount ||
-    '28';
+    currentBooking?.tutor?.reviewCount ??
+    currentBooking?.tutor?.reviewsCount ??
+    0;
 
   const tutorPhotoUrl = currentBooking?.tutor?.photoUrl;
 
@@ -71,7 +69,7 @@ export default function BookingSummaryScreen({
   ];
   const displayMonth = monthNames[month] || 'Sep';
 
-  const baseRate = Number(currentBooking?.tutor?.hourlyRate || currentBooking?.tutor?.fee || 700);
+  const baseRate = Number(currentBooking?.sessionFee ?? currentBooking?.tutor?.hourlyRate ?? currentBooking?.tutor?.fee ?? 700);
 
   const defaultPlans = {
     private: { title: '1-on-1 Private', fee: Math.round(baseRate * 1.7) },
@@ -80,43 +78,35 @@ export default function BookingSummaryScreen({
   };
 
   const plan = (groupPlans && groupPlans[groupSize]) || defaultPlans[groupSize] || defaultPlans.small;
-  const sessionFee = plan.fee;
+  const sessionFee = Number(plan.fee);
   const platformFee = 50;
   const total = sessionFee + platformFee;
 
-  // Real Database Save & Trigger Modal
-  const handlePay = async () => {
-    if (isSubmitting || isSuccessModalVisible) return;
+  const handlePay = () => {
+    if (submitting.current) return;
+    const bookingDate = new Date(Number(year), Number(month), Number(date));
+    if (!currentBooking?.slot || !(currentBooking?.tutor?.name || currentBooking?.tutorName || currentBooking?.tutor_name)
+      || bookingDate.getFullYear() !== Number(year) || bookingDate.getMonth() !== Number(month)
+      || bookingDate.getDate() !== Number(date) || !Number.isFinite(total) || sessionFee <= 0) {
+      Alert.alert('Check Booking Details', 'Choose a tutor, date, time slot and valid session fee before continuing.');
+      return;
+    }
+    submitting.current = true;
     setIsSubmitting(true);
     try {
-      const bookingPayload = {
-        tutor_name: tutorName,
-        subject: subject,
-        year: Number(year),
-        month: Number(month),
-        rescheduleId: currentBooking?.rescheduleId,
-        date: Number(date),
-        slot: slot,
-        mode: mode,
-        group_size: groupSize,
-        groupSize: groupSize,
-        total_fee: Number(total),
-        session_fee: Number(sessionFee),
-        platform_fee: Number(platformFee),
-        status: 'Confirmed',
-      };
-
-      // 1. Insert into Supabase bookings table
-      const savedBooking = await createBookingInDb(bookingPayload);
-
-      if (onConfirm) onConfirm(savedBooking);
-
-      // 3. Show confirmation modal
-      setIsSuccessModalVisible(true);
+      if (!onNavigateToPayment) throw new Error('The payment screen is unavailable. Please try again.');
+      onNavigateToPayment({
+        year: Number(year), month: Number(month), date: Number(date), slot,
+        tutorName, subject,
+        tutorId: currentBooking?.tutorId || currentBooking?.tutor?.id || currentBooking?.discovery_tutor_id || null,
+        tutorPhotoUrl, mode, groupSize,
+        rescheduleId: currentBooking?.rescheduleId || null,
+        sessionFee, platformFee, total,
+      });
     } catch (error) {
-      console.error('SUPABASE ERROR in handlePay:', error);
-      Alert.alert('Database Error', error.message || 'Failed to save booking to Supabase.');
+      Alert.alert('Unable to Continue', error.message || 'Please try again.');
     } finally {
+      submitting.current = false;
       setIsSubmitting(false);
     }
   };
@@ -139,7 +129,7 @@ export default function BookingSummaryScreen({
           <TouchableOpacity style={{ marginRight: 14 }}>
             <Ionicons name="notifications" size={22} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation?.navigate('studentProfile')}>
+          <TouchableOpacity onPress={() => navigation?.navigate(String(currentUser?.role).toLowerCase() === 'tutor' ? 'tutorProfile' : 'studentProfile')}>
             <Ionicons name="person-circle" size={26} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -183,7 +173,7 @@ export default function BookingSummaryScreen({
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Mode</Text>
             <Text style={styles.detailValue}>
-              {mode === 'physical' ? 'Physical (SLIIT Campus)' : 'Online (Zoom / Meet)'}
+              {mode === 'physical' ? `Physical (${currentBooking?.venue || 'Venue to be confirmed'})` : 'Online (Zoom / Meet)'}
             </Text>
           </View>
           <View style={styles.detailRow}>
@@ -222,23 +212,14 @@ export default function BookingSummaryScreen({
         <View style={styles.reminderBanner}>
           <Ionicons name="checkmark-circle-outline" size={22} color="#10B981" />
           <Text style={styles.reminderText}>
-            You will receive a notification reminder 15 minutes before your session starts.
+            Check the session details before continuing to payment.
           </Text>
         </View>
 
         {/* Pay Button */}
         <TouchableOpacity
           style={[styles.payBtn, isSubmitting && { opacity: 0.7 }]}
-          onPress={onNavigateToPayment ? () => onNavigateToPayment({
-            year, month, date, slot,
-            tutorName,
-            subject,
-            tutorId: currentBooking?.tutorId || currentBooking?.tutor?.id || currentBooking?.discovery_tutor_id || null,
-            tutorPhotoUrl,
-            mode, groupSize,
-            rescheduleId: currentBooking?.rescheduleId || null,
-            sessionFee, platformFee, total,
-          }) : handlePay}
+          onPress={handlePay}
           disabled={isSubmitting}
           activeOpacity={0.85}
         >
@@ -250,19 +231,7 @@ export default function BookingSummaryScreen({
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Booking Confirmed Modal */}
-      <BookingSuccessModal
-        visible={isSuccessModalVisible}
-        bookingDetails={{ date, slot, tutorName }}
-        onGoToBookings={() => {
-          setIsSuccessModalVisible(false);
-          navigation?.navigate('MyBookingsScreen');
-        }}
-        onBackToHome={() => {
-          setIsSuccessModalVisible(false);
-          navigation?.navigate('SearchHomeScreen');
-        }}
-      />
+
     </View>
   );
 }

@@ -1,7 +1,5 @@
 import { supabase } from './utils/supabase';
-
-// Session-management cache retained from the incoming booking flow.
-const tutorSessionsCache = [];
+import { getPaymentIdentity } from './services/paymentIdentity';
 
 // UI months are zero-based; database months are 1–12.
 export const normalizeBooking = (row) => ({
@@ -10,10 +8,11 @@ export const normalizeBooking = (row) => ({
   total_fee: Number(row.total_fee ?? row.totalFee ?? 0),
 });
 
-export const capacityFromBookings = (bookings, year, month, date, slot, excludeId = null) => {
+export const capacityFromBookings = (bookings, year, month, date, slot, excludeId = null, tutorName = null) => {
   const result = { privateBooked: false, smallBookedCount: 0, largeBookedCount: 0 };
   for (const booking of bookings) {
     if (booking.id === excludeId || booking.status !== 'Confirmed') continue;
+    if (tutorName && String(booking.tutor_name ?? booking.tutorName ?? '').trim().toLowerCase() !== tutorName.trim().toLowerCase()) continue;
     if (Number(booking.year) !== Number(year) || Number(booking.month) !== Number(month) ||
         Number(booking.date) !== Number(date) ||
         String(booking.slot ?? booking.time ?? '').trim().toLowerCase() !== String(slot).trim().toLowerCase()) continue;
@@ -25,13 +24,40 @@ export const capacityFromBookings = (bookings, year, month, date, slot, excludeI
   return result;
 };
 
-export const fetchAllBookings = async () => {
-  const { data, error } = await supabase.from('bookings').select('*').order('created_at', { ascending: false });
+export const fetchAllBookings = async (user) => {
+  if (!user?.id) return [];
+  const identity = await getPaymentIdentity(user.id, { isDemo: !!user.isDemo });
+  if (!identity) return [];
+  const column = String(user.role).trim().toLowerCase() === 'tutor' ? 'tutor_id' : 'student_id';
+  const { data, error } = await identity.client.from('bookings').select('*')
+    .eq(column, identity.userId).order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(normalizeBooking);
 };
-export const fetchCapacityForSlot = async (year, month, date, slot, excludeId = null) =>
-  capacityFromBookings(await fetchAllBookings(), year, month, date, slot, excludeId);
+export const fetchCapacityForSlot = async (year, month, date, slot, excludeId = null, tutorName = null, user = null) => {
+  if (!tutorName) throw new Error('Choose a tutor before checking availability.');
+  const identity = user ? await getPaymentIdentity(user.id, { isDemo: !!user.isDemo }) : null;
+  const client = identity?.client || supabase;
+  // Use the existing bookings schema and its existing access policies.
+  // Do not require a new RPC or alter the other feature's database setup.
+  const rows = [];
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await client.from('bookings')
+      .select('id, tutor_name, year, month, date, slot, group_size, status, student_id')
+      .eq('tutor_name', tutorName.trim()).eq('year', Number(year))
+      .eq('month', Number(month) + 1).eq('date', Number(date))
+      .eq('slot', slot).eq('status', 'Confirmed')
+      .order('id', { ascending: true }).range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    if (!Array.isArray(data)) throw new Error('The availability response could not be verified.');
+    rows.push(...data);
+    if (data.length < pageSize) break;
+  }
+  const ownedReschedule = identity && rows.some((row) => row.id === excludeId && row.student_id === identity.userId)
+    ? excludeId : null;
+  return capacityFromBookings(rows.map(normalizeBooking), year, month, date, slot, ownedReschedule, tutorName);
+};
 
 export const createBookingInDb = async (payload) => {
   const totalFee = Number(payload.total_fee ?? payload.totalFee ?? 750);
@@ -64,12 +90,19 @@ const mutateBooking = async (query) => {
     return { success: false, error };
   }
 };
-export const cancelBookingInDb = (id) =>
-  mutateBooking(supabase.from('bookings').update({ status: 'Cancelled' }).eq('id', id));
-export const completeBookingInDb = (id) =>
-  mutateBooking(supabase.from('bookings').update({ status: 'Completed' }).eq('id', id));
-export const deleteBookingFromDb = (id) =>
-  mutateBooking(supabase.from('bookings').delete().eq('id', id));
+const changeBooking = async (id, changes, user) => {
+  try {
+    const identity = user ? await getPaymentIdentity(user.id, { isDemo: !!user.isDemo }) : { client: supabase };
+    if (!identity) throw new Error('Please sign in again to update your bookings.');
+    let query = changes ? identity.client.from('bookings').update(changes) : identity.client.from('bookings').delete();
+    query = query.eq('id', id);
+    if (user) query = query.eq(String(user.role).trim().toLowerCase() === 'tutor' ? 'tutor_id' : 'student_id', identity.userId);
+    return mutateBooking(query);
+  } catch (error) { return { success: false, error }; }
+};
+export const cancelBookingInDb = (id, user) => changeBooking(id, { status: 'Cancelled' }, user);
+export const completeBookingInDb = (id, user) => changeBooking(id, { status: 'Completed' }, user);
+export const deleteBookingFromDb = (id, user) => changeBooking(id, null, user);
 
 // =========================================================================
 // TUTOR SESSION MANAGEMENT & DATABASE SYNC (tutor_sessions TABLE)
@@ -85,16 +118,16 @@ export const checkSlotConflict = async ({
 }) => {
   try {
     const targetYear = Number(year);
-    const targetMonth0 = Number(month);
     const targetMonth1 = Number(month) + 1;
     const targetDate = Number(date);
     const targetSlotClean = (slot || '').split(' - ')[0].trim().toLowerCase();
 
     // A. Check Supabase bookings
-    const { data: bookingsData } = await supabase
+    const { data: bookingsData, error: bookingsError } = await supabase
       .from('bookings')
       .select('*')
       .neq('status', 'Cancelled');
+    if (bookingsError) throw bookingsError;
 
     if (bookingsData && bookingsData.length > 0) {
       const conflictBooking = bookingsData.find((b) => {
@@ -107,7 +140,7 @@ export const checkSlotConflict = async ({
           b.tutor_name.trim().toLowerCase() !== currentTutorName.trim().toLowerCase();
 
         const yearMatches = !bYear || bYear === targetYear;
-        const monthMatches = !bMonth || bMonth === targetMonth0 || bMonth === targetMonth1;
+        const monthMatches = bMonth === targetMonth1;
         const dateMatches = bDate === targetDate;
         const slotMatches = bSlotClean && bSlotClean === targetSlotClean;
 
@@ -124,17 +157,18 @@ export const checkSlotConflict = async ({
     }
 
     // B. Check Supabase tutor_sessions table
-    const { data: sessionsData } = await supabase
+    const { data: sessionsData, error: sessionsError } = await supabase
       .from('tutor_sessions')
       .select('*')
       .eq('year', targetYear)
       .eq('date', targetDate)
       .eq('is_accepting_bookings', true);
+    if (sessionsError) throw sessionsError;
 
     if (sessionsData && sessionsData.length > 0) {
       const conflictSession = sessionsData.find((s) => {
         const sMonth = Number(s.month);
-        const monthMatches = !sMonth || sMonth === targetMonth0 || sMonth === targetMonth1;
+        const monthMatches = sMonth === targetMonth1;
         const differentTutor =
           s.tutor_name &&
           s.tutor_name.trim().toLowerCase() !== currentTutorName.trim().toLowerCase();
@@ -156,7 +190,7 @@ export const checkSlotConflict = async ({
     return { hasConflict: false };
   } catch (err) {
     console.error('Error in checkSlotConflict:', err);
-    return { hasConflict: false };
+    return { hasConflict: true, message: 'Unable to check slot conflicts. Please try again.' };
   }
 };
 
@@ -173,24 +207,32 @@ export const saveTutorSessionToDb = async (sessionData) => {
     slots: sessionData.slots || ['8:00 AM - 9:00 AM'],
     mode: sessionData.mode || 'physical',
     venue: sessionData.venue || 'SLIIT Malabe Campus, Block E - Lab 401',
-    max_capacity: Number(sessionData.maxCapacity || sessionData.max_capacity || 5),
-    fee: Number(sessionData.fee || sessionData.sessionFee || 700),
+    max_capacity: Number(sessionData.maxCapacity ?? sessionData.max_capacity ?? 5),
+    fee: Number(sessionData.fee ?? sessionData.sessionFee ?? 700),
     is_accepting_bookings: sessionData.isAcceptingBookings !== undefined ? sessionData.isAcceptingBookings : true,
   };
 
-  const { data, error } = await supabase.from('tutor_sessions').insert([payload]).select();
+  if (!Number.isInteger(payload.month) || payload.month < 1 || payload.month > 12 ||
+      new Date(payload.year, payload.month - 1, payload.date).getDate() !== payload.date ||
+      !Number.isInteger(payload.max_capacity) || payload.max_capacity < 1 ||
+      !Number.isFinite(payload.fee) || payload.fee <= 0) {
+    throw new Error('Check the session date, capacity and fee before saving.');
+  }
+  const existing = await supabase.from('tutor_sessions').select('id')
+    .eq('tutor_name', payload.tutor_name).eq('year', payload.year)
+    .eq('month', payload.month).eq('date', payload.date);
+  if (existing.error) throw existing.error;
+  const query = existing.data?.[0]
+    ? supabase.from('tutor_sessions').update(payload).eq('tutor_name', payload.tutor_name)
+      .eq('year', payload.year).eq('month', payload.month).eq('date', payload.date)
+    : supabase.from('tutor_sessions').insert([payload]);
+  const { data, error } = await query.select();
   if (error) {
     console.error('TUTOR SESSION SAVE ERROR:', error);
     throw error;
   }
-  console.log('TUTOR SESSION SAVED SUCCESSFULLY:', data);
-
-  // Update local cache
-  if (data && data[0]) {
-    tutorSessionsCache.push(data[0]);
-    return data[0];
-  }
-  return payload;
+  if (!data?.[0]) throw new Error('The session could not be saved. Please try again.');
+  return data[0];
 };
 
 // Backward compatibility alias
@@ -202,20 +244,13 @@ export const fetchActiveTutorSessionDates = async (year = new Date().getFullYear
     const targetYear = Number(year) || new Date().getFullYear();
     const rawMonth = Number(month);
 
-    // Support month querying for both 1-indexed (1-12) and 0-indexed (0-11)
-    const monthCandidates = [rawMonth];
-    if (rawMonth >= 0 && rawMonth <= 11) {
-      monthCandidates.push(rawMonth + 1);
-    }
-    if (rawMonth >= 1 && rawMonth <= 12) {
-      monthCandidates.push(rawMonth - 1);
-    }
+    if (!Number.isInteger(rawMonth) || rawMonth < 1 || rawMonth > 12) throw new Error('Database months must be between 1 and 12.');
 
     const { data, error } = await supabase
       .from('tutor_sessions')
       .select('date')
       .eq('year', targetYear)
-      .in('month', monthCandidates)
+      .eq('month', rawMonth)
       .eq('is_accepting_bookings', true);
 
     if (error) {

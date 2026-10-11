@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { transformSync } = require('@babel/core');
 
-function loadModule(file, dependencies = {}) {
+function loadModule(file, dependencies = {}, env = {}, fetchImpl = async () => { throw new Error('Local API unavailable in isolated tests'); }) {
   const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
   const { code } = transformSync(source, {
     babelrc: false,
@@ -12,13 +12,13 @@ function loadModule(file, dependencies = {}) {
     plugins: ['@babel/plugin-transform-modules-commonjs'],
   });
   const loaded = { exports: {} };
-  dependencies = { 'react-native': { Platform: { OS: 'web' } }, ...dependencies };
+  dependencies = { 'react-native': { Platform: { OS: 'web' } }, './qualificationDocuments': {}, ...dependencies };
   const requireDependency = (name) => {
     if (!(name in dependencies)) throw new Error(`Unexpected dependency: ${name}`);
     return dependencies[name];
   };
-  new Function('require', 'module', 'exports', 'fetch', code)(requireDependency, loaded, loaded.exports,
-    async () => { throw new Error('Local API unavailable in isolated tests'); });
+  new Function('require', 'module', 'exports', 'fetch', 'process', code)(requireDependency, loaded, loaded.exports,
+    fetchImpl, { env });
   return loaded.exports;
 }
 
@@ -147,14 +147,14 @@ test('successful login returns the Supabase UUID and never a mock token', async 
   assert.equal('password' in result.user, false);
 });
 
-test('incorrect passwords enter a demo account and clear the previous local session', async () => {
+test('explicit demo mode enters a demo account and clears the previous local session', async () => {
   const signOutCalls = [];
   const failure = async () => ({ data: null, error: new Error('Invalid credentials') });
   const supabase = { auth: {
     signInWithPassword: failure,
     signOut: async (options) => { signOutCalls.push(options); return { error: null }; },
   } };
-  const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase } });
+  const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase } }, { EXPO_PUBLIC_ENABLE_DEMO_AUTH: 'true' });
   const result = await apiService.login('test@example.com', 'wrong-password');
   assert.equal(result.success, true);
   assert.equal(result.user.isDemo, true);
@@ -168,10 +168,10 @@ test('incorrect passwords enter a demo account and clear the previous local sess
   assert.equal(service.requests.length, 0);
 });
 
-test('demo login still opens when Supabase is unreachable', async () => {
+test('explicit demo login still opens when Supabase is unreachable', async () => {
   const unavailable = async () => { throw new Error('Network unavailable'); };
   const supabase = { auth: { signInWithPassword: unavailable, signOut: unavailable } };
-  const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase } });
+  const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase } }, { EXPO_PUBLIC_ENABLE_DEMO_AUTH: 'true' });
   const result = await apiService.login('tutor@example.com', 'any-password');
   assert.equal(result.success, true);
   assert.equal(result.user.role, 'Tutor');
@@ -179,10 +179,56 @@ test('demo login still opens when Supabase is unreachable', async () => {
   assert.equal(result.token, null);
 });
 
+test('incorrect credentials and offline authentication cannot silently sign in by default', async () => {
+  for (const signInWithPassword of [
+    async () => ({ data: null, error: new Error('Invalid credentials') }),
+    async () => { throw new Error('Network unavailable'); },
+  ]) {
+    const supabase = { auth: { signInWithPassword } };
+    const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase } });
+    const result = await apiService.login('tutor@example.com', 'wrong-password');
+    assert.equal(result.success, false);
+    assert.equal(result.user, undefined);
+  }
+});
+
+test('a failed real OTP verification never falls back to accepting the demo code', async () => {
+  const supabase = { auth: {
+    signInWithOtp: async () => ({ error: null }),
+    verifyOtp: async () => ({ data: null, error: new Error('Invalid token') }),
+  } };
+  const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase } });
+  assert.equal((await apiService.verifyOtp('test@example.com', '123456')).success, false);
+  const sent = await apiService.sendOtp('test@example.com');
+  assert.equal(sent.success, true);
+  assert.equal(sent.otp, undefined);
+  assert.equal((await apiService.verifyOtp('test@example.com', '123456')).success, false);
+});
+
 test('failed registrations do not create Supabase accounts through demo login', async () => {
   const supabase = { auth: { signUp: async () => ({ data: null, error: new Error('Registration failed') }) } };
   const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase } });
   assert.equal((await apiService.register({ email: 'test@example.com', password: 'test-password' })).success, false);
+});
+
+test('registration never replaces the Supabase identity with a separate REST user', async () => {
+  let restCalls = 0;
+  const supabase = {
+    auth: { signUp: async () => ({ data: {
+      user: { id: userId, email: 'test@example.com', user_metadata: { role: 'Student' } },
+      session: { access_token: 'supabase-token' },
+    }, error: null }) },
+    from: () => ({ upsert: async () => ({ error: null }) }),
+  };
+  const { apiService } = loadModule('src/services/api.js', { '../utils/supabase': { supabase } }, {}, async () => {
+    restCalls++;
+    return { ok: true, json: async () => ({ success: true, token: 'local-token', user: { id: 'local-user' } }) };
+  });
+  const result = await apiService.register({ email: 'test@example.com', fullName: 'Student', role: 'Student', password: 'test-password' });
+  assert.equal(result.success, true);
+  assert.equal(result.user.id, userId);
+  assert.equal(result.token, 'supabase-token');
+  assert.equal(restCalls, 0);
 });
 
 test('Paid filter includes saved demo confirmations and preserves their stored status', async () => {
@@ -246,6 +292,7 @@ test('login prefers the incoming branch database profile over conflicting auth m
   assert.deepEqual(requests, [
     { table: 'profiles', filter: ['id', userId] },
     { table: 'tutor_profiles', filter: ['user_id', userId] },
+    { table: 'tutor_certificates', filter: ['tutor_id', userId] },
   ]);
 });
 

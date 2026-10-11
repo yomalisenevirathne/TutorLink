@@ -15,17 +15,19 @@ export default function EditCardScreen({ userId, cardId, isDemo, onBack, onSaved
   const [focusedField, setFocusedField] = useState(null);
   const expiryInput = useRef(null);
   const submitting = useRef(false);
-  const loading = !result || result.userId !== userId || result.cardId !== cardId || result.reload !== reload;
+  const loading = !result || result.userId !== userId || result.cardId !== cardId || result.isDemo !== isDemo || result.reload !== reload;
   const card = loading ? null : result.card;
 
   useFocusEffect(useCallback(() => {
     const controller = new AbortController();
+    setResult(null);
+    setError('');
     getPaymentMethodDetails(userId, cardId, { isDemo, signal: controller.signal }).then((details) => {
       if (controller.signal.aborted) return;
       setForm({ name: details.cardholderName, expiry: details.expiry });
-      setResult({ userId, cardId, reload, card: details });
+      setResult({ userId, cardId, isDemo, reload, card: details });
     }).catch((failure) => {
-      if (!controller.signal.aborted) setResult({ userId, cardId, reload, error: failure.message || 'Unable to load your saved card.' });
+      if (!controller.signal.aborted) setResult({ userId, cardId, isDemo, reload, error: failure.message || 'Unable to load your saved card.' });
     });
     return () => controller.abort();
   }, [userId, cardId, isDemo, reload]));
@@ -39,7 +41,7 @@ export default function EditCardScreen({ userId, cardId, isDemo, onBack, onSaved
       submitting.current = true;
       setBusy(true);
       const saved = await updatePaymentMethod(userId, cardId, metadata, { isDemo });
-      onSaved(saved);
+      onSaved?.(saved);
     } catch (failure) {
       setError(failure.message || 'Unable to save your changes. Please try again.');
     } finally {
