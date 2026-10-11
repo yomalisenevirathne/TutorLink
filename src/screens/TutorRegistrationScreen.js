@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Image } from 'react-native';
 import { apiService } from '../services/api';
+import { tutorService } from '../services/tutorService';
 import { pickImageWithPermissions, pickQualificationDocument } from '../utils/mediaPicker';
 
-export default function TutorRegistrationScreen({ onNavigateToVerifyOtp, onRegistrationSuccess, onBack }) {
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [subjects, setSubjects] = useState('');
-  const [experienceLevel, setExperienceLevel] = useState('Senior Tutor (4+ years)');
-  const [aboutYou, setAboutYou] = useState('');
+export default function TutorRegistrationScreen({ user, onNavigateToVerifyOtp, onRegistrationSuccess, onBack }) {
+  const [fullName, setFullName] = useState(user?.fullName || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber || '');
+  const [subjects, setSubjects] = useState(Array.isArray(user?.subjects) ? user.subjects.join(', ') : '');
+  const [experienceLevel, setExperienceLevel] = useState(user?.experienceLevel || 'Senior Tutor (4+ years)');
+  const [aboutYou, setAboutYou] = useState(user?.aboutYou || '');
   const [password, setPassword] = useState('password123');
-  const [avatarUrl, setAvatarUrl] = useState(null);
+  const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || null);
   const [certificateDocument, setCertificateDocument] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -71,13 +72,31 @@ export default function TutorRegistrationScreen({ onNavigateToVerifyOtp, onRegis
         }] : []
       };
 
-      const res = await apiService.register(payload);
+      const res = user?.tutorId
+        ? await apiService.updateProfile(payload)
+        : await apiService.register(payload);
       setLoading(false);
 
       if (res && res.success) {
+        const tutorPayload = {
+          userId: user?.id,
+          name: fullName,
+          email,
+          phone: phoneNumber,
+          photoUrl: avatarUrl,
+          subjects: payload.subjects,
+          experienceLevel,
+          bio: aboutYou,
+        };
+        const existingTutor = user?.tutorId
+          ? await tutorService.getById(user.tutorId)
+          : await tutorService.getByEmail(email);
+        const tutor = existingTutor
+          ? await tutorService.update(existingTutor.id, tutorPayload)
+          : await tutorService.create(tutorPayload);
         Alert.alert('Welcome!', 'Tutor account created successfully.');
         if (onRegistrationSuccess) {
-          onRegistrationSuccess(res.user);
+          onRegistrationSuccess({ ...(res.user || user), tutorId: tutor.id });
         }
       } else {
         Alert.alert('Registration Failed', res?.message || 'Error creating account');

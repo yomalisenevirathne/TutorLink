@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Switch, ScrollView, Alert } from 'react-native';
 import { pickQualificationDocument } from '../utils/mediaPicker';
+import { tutorService } from '../services/tutorService';
 
-export default function TutorProfileScreen({ user, onEditProfile, onCreateSession, onNavigateToBookings, onLogout, navigation }) {
+export default function TutorProfileScreen({ user, onEditProfile, onCreateSession, onNavigateToBookings, onLogout, onDeleteProfile, navigation }) {
   const [notifications, setNotifications] = useState(user?.preferences?.notifications ?? true);
   const [privacy, setPrivacy] = useState(user?.preferences?.privacy ?? false);
   const [activeTab, setActiveTab] = useState('Account');
@@ -41,9 +42,35 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
     );
   };
 
+  const handleDeleteProfile = () => {
+    Alert.alert(
+      'Delete tutor profile',
+      'This permanently removes your tutor listing from search. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const tutor = user?.tutorId
+                ? await tutorService.getById(user.tutorId)
+                : await tutorService.getByEmail(user?.email);
+              if (!tutor?.id) throw new Error('Tutor listing was not found.');
+              await tutorService.remove(tutor.id);
+              onDeleteProfile && onDeleteProfile();
+            } catch (error) {
+              Alert.alert('Delete failed', error.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         {/* Top Purple Banner Header */}
         <View style={styles.headerBanner}>
           <View style={styles.bannerNavRow}>
@@ -187,45 +214,12 @@ export default function TutorProfileScreen({ user, onEditProfile, onCreateSessio
           <Text style={styles.logoutIcon}>🚪</Text>
           <Text style={styles.logoutBtnText}>Log Out</Text>
         </TouchableOpacity>
+        
+        {/* Delete Profile Button */}
+        <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteProfile}>
+          <Text style={styles.deleteBtnText}>Delete Tutor Profile</Text>
+        </TouchableOpacity>
       </ScrollView>
-
-      {/* Bottom Navigation Bar */}
-      <View style={styles.bottomTabBar}>
-        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('Home')}>
-          <Text style={styles.tabIcon}>🏠</Text>
-          <Text style={[styles.tabLabel, activeTab === 'Home' && styles.tabLabelActive]}>Home</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.tabItem}
-          onPress={() => {
-            setActiveTab('Bookings');
-            if (onNavigateToBookings) {
-              onNavigateToBookings();
-            } else if (navigation?.navigate) {
-              navigation.navigate('ManageSessionScreen');
-            }
-          }}
-        >
-          <Text style={styles.tabIcon}>📅</Text>
-          <Text style={[styles.tabLabel, activeTab === 'Bookings' && styles.tabLabelActive]}>Bookings</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('Messages')}>
-          <Text style={styles.tabIcon}>💬</Text>
-          <Text style={[styles.tabLabel, activeTab === 'Messages' && styles.tabLabelActive]}>Messages</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('Payments')}>
-          <Text style={styles.tabIcon}>💳</Text>
-          <Text style={[styles.tabLabel, activeTab === 'Payments' && styles.tabLabelActive]}>Payments</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('Account')}>
-          <Text style={styles.tabIcon}>👤</Text>
-          <Text style={[styles.tabLabel, activeTab === 'Account' && styles.tabLabelActive]}>Account</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -236,7 +230,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   container: {
-    paddingBottom: 90,
+    paddingBottom: 24,
   },
   headerBanner: {
     height: 140,
@@ -320,6 +314,17 @@ const styles = StyleSheet.create({
     color: '#E11D48',
     textAlign: 'center',
     marginTop: 10,
+    marginBottom: 10,
+  },
+  deleteBtn: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginTop: 8,
+  },
+  deleteBtnText: {
+    color: '#DC2626',
+    fontSize: 13,
+    fontWeight: '700',
     marginBottom: 16,
   },
   card: {
@@ -481,7 +486,7 @@ const styles = StyleSheet.create({
   },
   logoutBtn: {
     marginHorizontal: 16,
-    marginBottom: 20,
+    marginBottom: 10,
     height: 48,
     backgroundColor: '#FFF1F2',
     borderRadius: 24,
@@ -499,35 +504,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#E11D48',
-  },
-  bottomTabBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 65,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  tabItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabIcon: {
-    fontSize: 18,
-    marginBottom: 2,
-  },
-  tabLabel: {
-    fontSize: 10,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  tabLabelActive: {
-    color: '#7C3AED',
-    fontWeight: '700',
   },
 });

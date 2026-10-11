@@ -3,7 +3,7 @@ import { StyleSheet, View, SafeAreaView, StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import BottomTabBar from './src/components/BottomTabBar';
 
-// --- Rashmika's Auth & Profile Screens (Original / Untouched) ---
+// --- Rashmika's Auth & Profile Screens ---
 import LoadingScreen from './src/screens/LoadingScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterSelectionScreen from './src/screens/RegisterSelectionScreen';
@@ -12,15 +12,6 @@ import StudentRegistrationScreen from './src/screens/StudentRegistrationScreen';
 import EmailVerificationScreen from './src/screens/EmailVerificationScreen';
 import StudentProfileScreen from './src/screens/StudentProfileScreen';
 import TutorProfileScreen from './src/screens/TutorProfileScreen';
-
-// --- Yomali's Booking Screens ---
-import ScheduleScreen from './src/screens/ScheduleScreen';
-import SessionPreferencesScreen from './src/screens/SessionPreferencesScreen';
-import BookingSummaryScreen from './src/screens/BookingSummaryScreen';
-import BookingSuccessScreen from './src/screens/BookingSuccessScreen';
-import MyBookingsScreen from './src/screens/MyBookingsScreen';
-import ManageSessionScreen from './src/screens/ManageSessionScreen';
-import { fetchAllBookings } from './src/bookingService';
 
 // --- Upeksha's Search Flow ---
 import { HomeScreen as SearchHomeScreen } from './src/features/search/screens/HomeScreen';
@@ -31,8 +22,16 @@ import { FavoritesScreen } from './src/features/search/screens/FavoritesScreen';
 import { TutorProfileScreen as SearchTutorProfileScreen } from './src/features/search/screens/TutorProfileScreen';
 import { DiscoveryProvider } from './src/features/search/context/DiscoveryContext';
 
+// --- Yomali's Booking & Session Screens ---
+import ScheduleScreen from './src/screens/ScheduleScreen';
+import SessionPreferencesScreen from './src/screens/SessionPreferencesScreen';
+import BookingSummaryScreen from './src/screens/BookingSummaryScreen';
+import BookingSuccessScreen from './src/screens/BookingSuccessScreen';
+import MyBookingsScreen from './src/screens/MyBookingsScreen';
+import ManageSessionScreen from './src/screens/ManageSessionScreen';
+import { fetchAllBookings } from './src/bookingService';
+
 export default function App() {
-  // Current screen state & History for back navigation
   const [currentScreen, setCurrentScreen] = useState('loading');
   const [screenHistory, setScreenHistory] = useState(['loading']);
 
@@ -131,47 +130,11 @@ export default function App() {
     });
   };
 
-  const releaseSlotCapacity = (booking) => {
-    if (!booking) return;
-    const { year, month, date, slot, group_size, groupSize } = booking;
-    const actualGroupSize = (group_size || groupSize || 'small').toLowerCase();
-    const key = `${year}-${month}-${date}-${slot}`;
-
-    setSessionCapacities((prev) => {
-      const current = prev[key];
-      if (!current) return prev;
-      if (actualGroupSize === 'private') {
-        return { ...prev, [key]: { ...current, privateBooked: false } };
-      } else if (actualGroupSize === 'small') {
-        return {
-          ...prev,
-          [key]: {
-            ...current,
-            smallBookedCount: Math.max(0, (current.smallBookedCount || 1) - 1),
-          },
-        };
-      } else if (actualGroupSize === 'large') {
-        return {
-          ...prev,
-          [key]: {
-            ...current,
-            largeBookedCount: Math.max(0, (current.largeBookedCount || 1) - 1),
-          },
-        };
-      }
-      return prev;
-    });
-  };
-
-  const handleCancelBooking = (bookingId, bookingData) => {
-    const booking = bookingData || myBookings.find((b) => b.id === bookingId);
-    if (booking) releaseSlotCapacity(booking);
+  const handleCancelBooking = (bookingId) => {
     setMyBookings((prev) => prev.filter((b) => b.id !== bookingId));
   };
 
-  const handleDeleteBooking = (bookingId, bookingData) => {
-    const booking = bookingData || myBookings.find((b) => b.id === bookingId);
-    if (booking) releaseSlotCapacity(booking);
+  const handleDeleteBooking = (bookingId) => {
     setMyBookings((prev) => prev.filter((b) => b.id !== bookingId));
   };
 
@@ -221,7 +184,6 @@ export default function App() {
 
       const isTutor = isTutorUser(currentUser);
 
-      // Role-Based Bookings Navigation
       if (screenName === 'Bookings') {
         const target = isTutor ? 'ManageSessionScreen' : 'ScheduleScreen';
         setScreenHistory((prev) => [...prev, target]);
@@ -247,7 +209,6 @@ export default function App() {
           return newHistory;
         }
 
-        // Fallback default back routes if at the root
         if (
           currentScreen === 'SearchScreen' ||
           currentScreen === 'ResultsScreen' ||
@@ -280,7 +241,7 @@ export default function App() {
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
         <View style={styles.content}>
-          {/* ================= 1. RASHMIKA'S FLOW (UNTOUCHED) ================= */}
+          {/* ================= 1. RASHMIKA'S AUTH FLOW ================= */}
           {currentScreen === 'loading' && (
             <LoadingScreen onFinishLoading={() => setTimeout(() => setCurrentScreen('login'), 0)} />
           )}
@@ -317,6 +278,7 @@ export default function App() {
 
           {currentScreen === 'tutorReg' && (
             <TutorRegistrationScreen
+              user={currentUser}
               onNavigateToVerifyOtp={(email, otp) => {
                 setVerificationEmail(email);
                 setDemoOtpCode(otp);
@@ -344,7 +306,13 @@ export default function App() {
             <EmailVerificationScreen
               email={verificationEmail}
               demoOtp={demoOtpCode}
-              onVerificationSuccess={() => setCurrentScreen('SearchHomeScreen')}
+              onVerificationSuccess={() => {
+                if (isTutorUser(currentUser)) {
+                  setCurrentScreen('tutorProfile');
+                } else {
+                  setCurrentScreen('studentProfile');
+                }
+              }}
               onBack={() => setCurrentScreen('login')}
             />
           )}
@@ -366,6 +334,10 @@ export default function App() {
               onCreateSession={() => setCurrentScreen('ManageSessionScreen')}
               onNavigateToBookings={() => setCurrentScreen('ManageSessionScreen')}
               onEditProfile={() => setCurrentScreen('tutorReg')}
+              onDeleteProfile={() => {
+                setCurrentUser(null);
+                setCurrentScreen('login');
+              }}
               onLogout={handleLogout}
             />
           )}

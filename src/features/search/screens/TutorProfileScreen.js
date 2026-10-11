@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, } fro
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, shadow } from '../../../constants/colors';
 import { supabase } from '../../../utils/supabase';
+import { tutorService } from '../../../services/tutorService';
 import { Avatar } from '../components/Avatar';
 import { Chip } from '../components/Chip';
 import { RatingStars } from '../components/RatingStars';
@@ -32,14 +33,7 @@ export function TutorProfileScreen({ id, navigation }) {
         async function fetchTutorDetails() {
             try {
                 setLoading(true);
-                const { data: tutorData, error: tutorError } = await supabase
-                    .from('tutors')
-                    .select('*')
-                    .eq('id', id)
-                    .single();
-                if (tutorError)
-                    throw tutorError;
-                setTutor(tutorData);
+                setTutor(await tutorService.getById(id));
 
                 const { data: reviewsData, error: reviewsError } = await supabase
                     .from('reviews')

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, shadow } from '../../../constants/colors';
-import { supabase } from '../../../utils/supabase';
+import { tutorService } from '../../../services/tutorService';
 import { FilterPill } from '../components/FilterPill';
 import { NoResultsState } from '../components/NoResultsState';
 import { TutorResultCard } from '../components/TutorResultCard';
@@ -46,11 +46,8 @@ export function ResultsScreen({ navigation }) {
         async function fetchFilteredTutors() {
             try {
                 setLoading(true);
-                const { data, error } = await supabase.from('tutors').select('*');
-                if (error)
-                    throw error;
-
-                const normalized = (data || []).map((t) => ({
+                const data = await tutorService.list();
+                const normalized = data.map((t) => ({
                     ...t,
                     hourlyRate: t.hourlyRate ?? t.hourly_rate ?? 0,
                     avgRating: t.avgRating ?? t.rating ?? t.avg_rating ?? 0,

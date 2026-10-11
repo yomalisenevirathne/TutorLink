@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../../constants/colors';
 import { supabase } from '../../../utils/supabase';
@@ -30,10 +30,14 @@ export function FilterSheet({ initialSection, onClose }) {
     } catch {
         insets = { top: 0, bottom: 0, left: 0, right: 0 };
     }
-    const { filters, setFilters, query } = useDiscovery();
+    const {
+        filters, setFilters, query, filterPresets, saveFilterPreset,
+        updateFilterPreset, deleteFilterPreset,
+    } = useDiscovery();
     const [draft, setDraft] = useState(filters || DEFAULT_FILTERS);
     const [atBottom, setAtBottom] = useState(false);
     const [previewCount, setPreviewCount] = useState(0);
+    const [presetName, setPresetName] = useState('');
     const scrollRef = useRef(null);
     const sectionY = useRef({});
     const update = (patch) => setDraft((d) => ({ ...(d || DEFAULT_FILTERS), ...patch }));
@@ -117,6 +121,64 @@ export function FilterSheet({ initialSection, onClose }) {
             contentH.current = h;
             checkFits();
         }}>
+              <View style={styles.presetSection}>
+                <Text style={styles.sectionTitle}>Saved Filter Presets</Text>
+                <View style={styles.presetInputRow}>
+                  <TextInput
+                    value={presetName}
+                    onChangeText={setPresetName}
+                    placeholder="Preset name"
+                    placeholderTextColor={colors.muted}
+                    style={styles.presetInput}
+                    accessibilityLabel="Filter preset name"
+                  />
+                  <Pressable
+                    style={styles.savePresetButton}
+                    onPress={async () => {
+                        try {
+                            await saveFilterPreset(presetName, draft);
+                            setPresetName('');
+                        } catch (error) {
+                            Alert.alert('Save preset failed', error.message);
+                        }
+                    }}
+                  >
+                    <Text style={styles.savePresetText}>Save</Text>
+                  </Pressable>
+                </View>
+                {filterPresets.length > 0 ? (
+                  <View style={styles.presetList}>
+                    {filterPresets.map((preset) => (
+                      <View key={preset.id} style={styles.presetRow}>
+                        <Pressable
+                          style={styles.presetChip}
+                          onPress={() => {
+                              const selected = { ...DEFAULT_FILTERS, ...preset.filters_json };
+                              setDraft(selected);
+                              setFilters(selected);
+                          }}
+                        >
+                          <Text style={styles.presetChipText}>{preset.name}</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => updateFilterPreset(preset.id, { filters_json: draft })}
+                          accessibilityLabel={`Update ${preset.name}`}
+                        >
+                          <Ionicons name="refresh-outline" size={19} color={colors.primary}/>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => deleteFilterPreset(preset.id)}
+                          accessibilityLabel={`Delete ${preset.name}`}
+                        >
+                          <Ionicons name="trash-outline" size={19} color={colors.error}/>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.presetHint}>Save your current filters for quick access.</Text>
+                )}
+              </View>
               <Section id="sort" onLayoutY={onSectionLayout} title="Sort By">
                 {Object.keys(SORT_LABELS).map((opt) => (<Pressable key={opt} style={styles.radioRow} onPress={() => update({ sort: opt })} accessibilityRole="radio" accessibilityState={{ checked: draft.sort === opt }}>
                     <Ionicons name={draft.sort === opt ? 'radio-button-on' : 'radio-button-off'} size={22} color={draft.sort === opt ? colors.primary : colors.muted}/>
@@ -243,6 +305,16 @@ const styles = StyleSheet.create({
     reset: { fontSize: 14, fontWeight: '600', color: colors.primary },
     body: { flexShrink: 1 },
     content: { paddingHorizontal: 20, paddingBottom: 48 },
+    presetSection: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 10 },
+    presetInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    presetInput: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, color: colors.text },
+    savePresetButton: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
+    savePresetText: { color: '#fff', fontWeight: '700' },
+    presetList: { gap: 8 },
+    presetRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    presetChip: { flex: 1, backgroundColor: colors.primarySoft, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 9 },
+    presetChipText: { color: colors.primary, fontWeight: '700' },
+    presetHint: { fontSize: 12, color: colors.muted },
     section: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 10 },
     sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
     radioRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
