@@ -127,9 +127,6 @@ export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo =
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBackToAccount} accessibilityRole="button" accessibilityLabel="Back to account">
-          <Feather name="arrow-left" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
         <Text style={styles.title} accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Payment History</Text>
         <TouchableOpacity style={styles.headerActionButton} onPress={onStarPress}
           accessibilityRole="button" accessibilityLabel="View all tutors">
@@ -276,7 +273,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#FAF8FD' },
   loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
   header: { minHeight: 76, backgroundColor: '#6A1B9A', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 8, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, boxShadow: '0px 6px 16px rgba(106, 27, 154, 0.14)' },
-  backButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   title: { flex: 1, color: '#FFFFFF', fontSize: 20, fontWeight: '700', letterSpacing: -0.5 },
   headerActionButton: { width: 44, height: 44, borderRadius: 15, backgroundColor: 'rgba(255, 255, 255, 0.13)', alignItems: 'center', justifyContent: 'center' },
   searchRow: { width: '100%', maxWidth: 720, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, marginTop: 24, marginBottom: 6 },

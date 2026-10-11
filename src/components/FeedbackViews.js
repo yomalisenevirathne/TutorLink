@@ -168,13 +168,12 @@ export function FeedbackComment({ comment, viewerId, onReact, onReply, onEdit, o
             menuAnchor.y + menuAnchor.height + 64 > height - insets.bottom
               ? menuAnchor.y - 64 : menuAnchor.y + menuAnchor.height + 6)),
         }]} accessibilityViewIsModal onAccessibilityEscape={closeMenu}>
-          <Pressable style={({ pressed }) => [styles.ownerAction, pressed && styles.editActionPressed]}
+          <Pressable style={({ pressed }) => [styles.ownerAction, styles.editAction, pressed && styles.editActionPressed]}
             onPress={() => selectMenuAction(onEdit)} disabled={busy}
             accessibilityRole="button" accessibilityLabel="Edit your comment" accessibilityState={{ disabled: busy }}>
             <Feather name="edit-3" size={16} color="#7C3AED" /><Text style={styles.editLabel}>Edit</Text>
           </Pressable>
-          <View style={styles.menuDivider} />
-          <Pressable style={({ pressed }) => [styles.ownerAction, pressed && styles.deleteActionPressed]}
+          <Pressable style={({ pressed }) => [styles.ownerAction, styles.deleteAction, pressed && styles.deleteActionPressed]}
             onPress={() => selectMenuAction(onDelete)} disabled={busy}
             accessibilityRole="button" accessibilityLabel="Delete your comment" accessibilityState={{ disabled: busy }}>
             <Feather name="trash-2" size={16} color="#D14359" /><Text style={styles.deleteLabel}>Delete</Text>
@@ -268,13 +267,14 @@ const styles = StyleSheet.create({
   moreButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
   moreButtonActive: { backgroundColor: '#F0E8FD' },
   menuOverlay: { flex: 1 },
-  ownerActions: { position: 'absolute', flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EDE5F8', borderRadius: 16, padding: 5, boxShadow: '0px 6px 24px rgba(50, 28, 82, 0.14)' },
-  ownerAction: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, borderRadius: 11 },
-  menuDivider: { width: 1, height: 20, backgroundColor: '#EEE8F5', marginHorizontal: 3 },
-  editActionPressed: { backgroundColor: '#F4EEFD' },
-  deleteActionPressed: { backgroundColor: '#FFF1F3' },
-  editLabel: { fontSize: 12, fontWeight: '600', color: '#7C3AED' },
-  deleteLabel: { fontSize: 12, fontWeight: '600', color: '#D14359' },
+  ownerActions: { position: 'absolute', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E1D4F1', borderRadius: 16, padding: 6, boxShadow: '0px 6px 24px rgba(50, 28, 82, 0.14)' },
+  ownerAction: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, borderWidth: 1, borderRadius: 11 },
+  editAction: { backgroundColor: '#F3ECFF', borderColor: '#D6BDF5' },
+  deleteAction: { backgroundColor: '#FFF2F4', borderColor: '#F3BCC6' },
+  editActionPressed: { backgroundColor: '#E8DAFC', borderColor: '#B68DEB' },
+  deleteActionPressed: { backgroundColor: '#FFE1E7', borderColor: '#E897A7' },
+  editLabel: { fontSize: 13, fontWeight: '600', color: '#7C3AED' },
+  deleteLabel: { fontSize: 13, fontWeight: '600', color: '#D14359' },
   commentBody: { fontSize: 14, color: '#62536F', lineHeight: 23, marginTop: 12, marginBottom: 14 },
   commentActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   reaction: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minWidth: 44, minHeight: 44, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: '#EEE9F5', backgroundColor: '#F8F6FC' },
