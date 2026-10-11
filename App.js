@@ -252,7 +252,6 @@ export default function App() {
         {isFeedbackComments && <FeedbackCommentsScreen key={typeof tutorId === 'string' ? tutorId : tutorId?.[0]}
           tutorId={typeof tutorId === 'string' ? tutorId : tutorId?.[0]} user={currentUser} onBack={navigation.goBack} />}
         {isPaymentHistory && <PaymentHistoryScreen key={currentUser?.id} onBackToAccount={openAccount} userId={currentUser?.id} isDemo={!!currentUser?.isDemo}
-          onStarPress={() => navigation.navigate('testingfeedback')}
           cardsVersion={currentBooking.cardsVersion || 0} onManagePayments={() => navigation.navigate('managePayments')}
           onAddCard={() => navigation.navigate('addCard', { addCardReturnTo: 'paymentHistory' })} />}
         {isManagePayments && <ManagePaymentsScreen userId={currentUser.id} isDemo={!!currentUser.isDemo} cardsVersion={currentBooking.cardsVersion || 0}

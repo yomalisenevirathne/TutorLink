@@ -51,7 +51,7 @@ function PaymentCard({ payment }) {
   );
 }
 
-export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo = false, cardsVersion = 0, onManagePayments, onAddCard, onStarPress }) {
+export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo = false, cardsVersion = 0, onManagePayments, onAddCard }) {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -128,10 +128,6 @@ export default function PaymentHistoryScreen({ onBackToAccount, userId, isDemo =
     <View style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.title} accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Payment History</Text>
-        <TouchableOpacity style={styles.headerActionButton} onPress={onStarPress}
-          accessibilityRole="button" accessibilityLabel="View all tutors">
-          <Feather name="star" size={21} color="#FFFFFF" />
-        </TouchableOpacity>
         <TouchableOpacity style={styles.headerActionButton} onPress={() => { setFilterVisible(false); setSettingsVisible(true); }}
           accessibilityRole="button" accessibilityLabel="Payment settings" accessibilityState={{ expanded: settingsVisible }}>
           <Feather name="settings" size={21} color="#FFFFFF" />

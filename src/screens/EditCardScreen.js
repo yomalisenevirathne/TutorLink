@@ -61,17 +61,6 @@ export default function EditCardScreen({ userId, cardId, isDemo, onBack, onSaved
           <ActivityIndicator color="#6A1B9A" accessibilityLabel="Loading card details" />
           <Text style={styles.loadingText}>Loading card details…</Text>
         </View> : card ? <>
-          <View style={styles.card} accessibilityLabel={`${card.brand} card ending in ${card.last4}`}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardBrand}>{card.brand}</Text>
-              <View style={styles.cardIcon}><Feather name="credit-card" size={23} color="#FFFFFF" /></View>
-            </View>
-            <Text style={styles.cardNumber}>•••• {card.last4}</Text>
-            <View style={styles.cardFooter}>
-              <Text style={styles.cardCaption}>Saved payment method</Text>
-              <Text style={styles.cardExpiry}>Expires {card.expiry}</Text>
-            </View>
-          </View>
           <View style={styles.formPanel}>
             <Text style={styles.sectionTitle} accessibilityRole="header">Card details</Text>
             <Text style={styles.description}>Update your cardholder name and expiry date.</Text>
@@ -131,14 +120,6 @@ const styles = StyleSheet.create({
   content: { width: '100%', maxWidth: 600, alignSelf: 'center', padding: 20, paddingTop: 28, gap: 20 },
   loadingState: { minHeight: 180, alignItems: 'center', justifyContent: 'center', gap: 14 },
   loadingText: { color: '#8B7B99', fontSize: 13 },
-  card: { padding: 22, borderRadius: 24, backgroundColor: '#6A1B9A', gap: 20, boxShadow: '0px 8px 20px rgba(106, 27, 154, 0.18)' },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  cardBrand: { flex: 1, color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  cardIcon: { width: 40, height: 36, borderRadius: 12, backgroundColor: 'rgba(255, 255, 255, 0.15)', alignItems: 'center', justifyContent: 'center' },
-  cardNumber: { color: '#FFFFFF', fontSize: 24, fontWeight: '600', letterSpacing: 3, fontVariant: ['tabular-nums'] },
-  cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },
-  cardCaption: { color: '#E1D0F8', fontSize: 11, lineHeight: 16 },
-  cardExpiry: { color: '#EEE3FC', fontSize: 11, lineHeight: 16, fontVariant: ['tabular-nums'] },
   formPanel: { backgroundColor: '#FFFFFF', padding: 20, borderRadius: 22, borderWidth: 1, borderColor: '#EDE5F6', boxShadow: '0px 4px 12px rgba(50, 26, 78, 0.035)' },
   sectionTitle: { color: '#2D203D', fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
   description: { color: '#8B7B99', fontSize: 12, lineHeight: 19, marginTop: 6, marginBottom: 24 },
