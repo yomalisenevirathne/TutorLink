@@ -1,14 +1,20 @@
-import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Keyboard, Platform, View, Text, Pressable, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function BottomTabBar({ currentScreen, navigation, accountScreen = 'studentProfile', includeBottomInset = false }) {
   const insets = useSafeAreaInsets();
+  const [keyboardVisible, setKeyboardVisible] = useState(() => Keyboard.isVisible());
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
   const bottomInset = includeBottomInset ? insets.bottom : 0;
   // Login / Register screens වල Bottom Bar එක පෙන්වන්නේ නෑ
   const hideScreens = ['loading', 'login', 'selection', 'tutorReg', 'studentReg', 'verifyOtp'];
-  if (hideScreens.includes(currentScreen)) {
+  if (keyboardVisible || hideScreens.includes(currentScreen)) {
     return null;
   }
 

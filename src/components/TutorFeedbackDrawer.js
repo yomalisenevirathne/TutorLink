@@ -66,7 +66,7 @@ export default function TutorFeedbackDrawer({ tutor, user, onClose, onViewCommen
   }), [close, slide]);
 
   return <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={() => close()}>
-    <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'web' ? undefined : 'padding'}>
       <Pressable style={styles.backdrop} onPress={() => close()}
         accessibilityRole="button" accessibilityLabel="Dismiss tutor feedback" />
       <Animated.View style={[styles.sheet, { height: sheetHeight, paddingBottom: bottomPadding, transform: [{ translateY: slide }] }]}

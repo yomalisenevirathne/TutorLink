@@ -153,7 +153,7 @@ export default function App() {
   return (
       <SafeAreaView
         style={[styles.safeArea, isPaymentArea && styles.paymentSafeArea, isFeedbackArea && styles.feedbackSafeArea, isBookingScreen && styles.bookingSafeArea, isPaymentProcessing && styles.processingSafeArea]}
-        edges={isPaymentArea ? ['top', 'left', 'right'] : ['top', 'left', 'right', 'bottom']}
+        edges={isPaymentArea || isFeedbackArea ? ['top', 'left', 'right'] : ['top', 'left', 'right', 'bottom']}
       >
         <StatusBar barStyle={(isPaymentArea && !isPaymentProcessing) || isBookingScreen || isFeedbackArea ? 'light-content' : 'dark-content'} />
 
@@ -342,7 +342,7 @@ export default function App() {
             <SearchTutorProfileScreen navigation={navigation} id={currentBooking.tutorId} />
           )}
       </View>
-      {currentUser && <BottomTabBar currentScreen={currentScreen} navigation={navigation} accountScreen={accountScreen} includeBottomInset={isPaymentArea} />}
+      {currentUser && <BottomTabBar currentScreen={currentScreen} navigation={navigation} accountScreen={accountScreen} includeBottomInset={isPaymentArea || isFeedbackArea} />}
       </SafeAreaView>
   );
 }

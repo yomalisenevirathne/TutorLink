@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
@@ -98,7 +98,7 @@ export function FeedbackComposer({ user, onSend, busy, replyTo, onCancelReply, e
       <TextInput ref={input} style={styles.commentInput} value={text} onChangeText={setText}
         placeholder={editingComment ? 'Update your comment...' : replyTo ? 'Write a reply...' : 'Share your experience...'} placeholderTextColor="#8B8491"
         accessibilityLabel={editingComment ? 'Edit your comment' : replyTo ? 'Write a reply' : 'Add a comment'}
-        maxLength={1000} multiline scrollEnabled editable={!busy} />
+        maxLength={1000} multiline scrollEnabled textAlignVertical="top" editable={!busy} />
       <TouchableOpacity style={[styles.sendButton, sendDisabled && styles.sendButtonDisabled]} onPress={send} disabled={sendDisabled}
         accessibilityRole="button" accessibilityLabel={editingComment ? 'Save comment changes' : replyTo ? 'Send reply' : 'Send comment'}
         accessibilityState={{ disabled: sendDisabled }}>
@@ -139,7 +139,8 @@ export function FeedbackComment({ comment, viewerId, onReact, onReply, onEdit, o
       </Pressable>}
     </View>
     <Text style={styles.commentBody}>{comment.text}</Text>
-    <View style={[styles.commentActions, showOwnerActions && styles.compactActions]} onAccessibilityEscape={closeMenu}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled"
+      contentContainerStyle={styles.commentActions} onAccessibilityEscape={closeMenu}>
       {['like', 'dislike'].map((kind) => <Pressable key={kind}
         style={({ pressed }) => [styles.reaction, showOwnerActions && styles.compactReaction,
           ownReaction === kind && styles.activeReaction, pressed && styles.reactionPressed]}
@@ -147,35 +148,31 @@ export function FeedbackComment({ comment, viewerId, onReact, onReply, onEdit, o
         accessibilityLabel={`${kind === 'like' ? 'Like' : 'Dislike'} comment by ${comment.authorName}`}
         aria-pressed={ownReaction === kind} aria-disabled={busy}
         accessibilityState={{ selected: ownReaction === kind, disabled: busy }}>
-        <Feather name={kind === 'like' ? 'thumbs-up' : 'thumbs-down'} size={showOwnerActions ? 14 : 17} color={ownReaction === kind ? '#6500FF' : '#514A58'} />
-        {reactions.includes(kind) && <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
-          style={[styles.reactionCount, showOwnerActions && styles.compactReactionText, ownReaction === kind && styles.selectedReaction]}>
+        <Feather name={kind === 'like' ? 'thumbs-up' : 'thumbs-down'} size={18} color={ownReaction === kind ? '#6500FF' : '#514A58'} />
+        {reactions.includes(kind) && <Text style={[styles.reactionCount, ownReaction === kind && styles.selectedReaction]}>
           {reactions.filter((vote) => vote === kind).length}
         </Text>}
       </Pressable>)}
       {!isReply && onReply && <Pressable style={({ pressed }) => [styles.reaction, styles.replyButton,
-        showOwnerActions && styles.compactReaction, showOwnerActions && styles.compactReply, pressed && styles.reactionPressed]}
+        showOwnerActions && styles.iconAction, pressed && styles.reactionPressed]}
         onPress={() => onReply(comment)} disabled={busy}
         accessibilityRole="button" accessibilityLabel={`Reply to ${comment.authorName}`} accessibilityState={{ disabled: busy }}>
-        <Feather name="message-square" size={showOwnerActions ? 14 : 16} color="#746580" />
-        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
-          style={[styles.reactionCount, showOwnerActions && styles.compactReactionText]}>Reply</Text>
+        <Feather name="message-square" size={17} color="#746580" />
+        {!showOwnerActions && <Text style={styles.reactionCount}>Reply</Text>}
       </Pressable>}
-      {showOwnerActions && <>
+    {showOwnerActions && <View style={styles.ownerActions}>
         <Pressable style={({ pressed }) => [styles.ownerAction, styles.editAction, pressed && styles.editActionPressed]}
           onPress={() => selectMenuAction(onEdit)} disabled={busy}
           accessibilityRole="button" accessibilityLabel="Edit your comment" accessibilityState={{ disabled: busy }}>
-          <Feather name="edit-3" size={14} color="#7C3AED" />
-          <Text style={styles.editLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Edit</Text>
+          <Feather name="edit-3" size={17} color="#7C3AED" />
         </Pressable>
         <Pressable style={({ pressed }) => [styles.ownerAction, styles.deleteAction, pressed && styles.deleteActionPressed]}
           onPress={() => selectMenuAction(onDelete)} disabled={busy}
           accessibilityRole="button" accessibilityLabel="Delete your comment" accessibilityState={{ disabled: busy }}>
-          <Feather name="trash-2" size={14} color="#D14359" />
-          <Text style={styles.deleteLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>Delete</Text>
+          <Feather name="trash-2" size={17} color="#D14359" />
         </Pressable>
-      </>}
-    </View>
+    </View>}
+    </ScrollView>
   </View>;
 }
 
@@ -225,12 +222,12 @@ const styles = StyleSheet.create({
   composer: { borderTopWidth: 1, borderColor: '#EEEAF5', backgroundColor: '#FFFFFF', paddingVertical: 12, paddingHorizontal: 18 },
   compactComposer: { borderTopWidth: 0, backgroundColor: '#FFFFFF', paddingHorizontal: 0, paddingVertical: 10 },
   composerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  commentInput: { flex: 1, borderWidth: 1, borderColor: '#E4DCEF', backgroundColor: '#FBFAFD', borderRadius: 12, minHeight: 46, maxHeight: 100, paddingHorizontal: 12, paddingVertical: 12, fontSize: 13, color: '#302837' },
-  sendButton: { width: 42, minHeight: 44, borderRadius: 12, backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center' },
+  commentInput: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: '#E4DCEF', backgroundColor: '#FBFAFD', borderRadius: 12, minHeight: 48, maxHeight: 120, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, lineHeight: 22, color: '#302837' },
+  sendButton: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center' },
   sendButtonDisabled: { backgroundColor: '#F1ECF8' },
   replyBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F5F0FD', borderRadius: 10, paddingLeft: 10, marginBottom: 8 },
   replyText: { flex: 1, fontSize: 11, color: '#6500FF' },
-  cancelReply: { width: 36, height: 32, alignItems: 'center', justifyContent: 'center' },
+  cancelReply: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   comment: { paddingVertical: 2 },
   replyComment: { marginLeft: 16, marginTop: 16, borderWidth: 1, borderLeftWidth: 3, borderColor: '#EDE5F8', borderLeftColor: '#CFB7FA', borderRadius: 16, backgroundColor: '#FAF8FE', paddingHorizontal: 12, paddingVertical: 12 },
   commentIdentity: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
@@ -241,23 +238,20 @@ const styles = StyleSheet.create({
   youBadge: { fontSize: 10, fontWeight: '600', color: '#7C3AED', backgroundColor: '#F0E8FD', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 7, overflow: 'hidden' },
   moreButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
   moreButtonActive: { backgroundColor: '#F0E8FD' },
-  ownerAction: { flex: 1.5, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, minHeight: 44, paddingHorizontal: 2, borderWidth: 1, borderRadius: 10 },
+  ownerActions: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 'auto' },
+  ownerAction: { width: 44, height: 44, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: 12 },
   editAction: { backgroundColor: '#F3ECFF', borderColor: '#D6BDF5' },
-  deleteAction: { flex: 1.8, backgroundColor: '#FFF2F4', borderColor: '#F3BCC6' },
+  deleteAction: { backgroundColor: '#FFF2F4', borderColor: '#F3BCC6' },
   editActionPressed: { backgroundColor: '#E8DAFC', borderColor: '#B68DEB' },
   deleteActionPressed: { backgroundColor: '#FFE1E7', borderColor: '#E897A7' },
-  editLabel: { flexShrink: 1, fontSize: 11, fontWeight: '600', color: '#7C3AED' },
-  deleteLabel: { flexShrink: 1, fontSize: 11, fontWeight: '600', color: '#D14359' },
   commentBody: { fontSize: 14, color: '#62536F', lineHeight: 23, marginTop: 12, marginBottom: 14 },
-  commentActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  compactActions: { flexWrap: 'nowrap', alignItems: 'center', width: '100%', maxWidth: 380, gap: 4 },
-  compactReaction: { flex: 1, minWidth: 0, paddingHorizontal: 2, gap: 4, borderRadius: 10 },
-  compactReply: { flex: 1.5 },
-  compactReactionText: { flexShrink: 1, fontSize: 10 },
+  commentActions: { flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  compactReaction: { paddingHorizontal: 8, gap: 4 },
+  iconAction: { width: 44, paddingHorizontal: 0 },
   reaction: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minWidth: 44, minHeight: 44, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: '#EEE9F5', backgroundColor: '#F8F6FC' },
   replyButton: { paddingHorizontal: 14 },
   activeReaction: { backgroundColor: '#EFE5FF', borderColor: '#D9C2FC' },
   reactionPressed: { opacity: 0.65 },
-  reactionCount: { fontSize: 11, fontWeight: '500', color: '#746580' },
+  reactionCount: { fontSize: 13, fontWeight: '500', color: '#746580' },
   selectedReaction: { color: '#6500FF' },
 });

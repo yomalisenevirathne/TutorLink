@@ -14,7 +14,6 @@ function TutorComments({ tutor, user }) {
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleteError, setDeleteError] = useState('');
   const list = useRef(null);
-  const insets = useSafeAreaInsets();
   const threads = useMemo(() => {
     const replies = new Map();
     for (const comment of feedback.comments) {
@@ -64,9 +63,8 @@ function TutorComments({ tutor, user }) {
     </TouchableOpacity>
   </View>;
 
-  return <KeyboardAvoidingView style={styles.body} behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 64 : 0}>
-    <FlatList ref={list} data={threads} keyExtractor={(comment) => comment.id} keyboardShouldPersistTaps="handled"
+  return <View style={styles.body}>
+    <FlatList style={styles.body} ref={list} data={threads} keyExtractor={(comment) => comment.id} keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}
       ListHeaderComponent={<>
         <FeedbackRatingCard tutor={tutor} summary={feedback.summary} ownRating={feedback.ownRating} onRate={feedback.rate} busy={feedback.busy} />
@@ -99,10 +97,11 @@ function TutorComments({ tutor, user }) {
     {pendingDelete && <CommentDeleteDialog busy={feedback.busy} error={deleteError}
       hasReplies={feedback.comments.some((comment) => comment.parentId === pendingDelete.id)}
       onCancel={() => setPendingDelete(null)} onConfirm={confirmDelete} />}
-  </KeyboardAvoidingView>;
+  </View>;
 }
 
 export default function FeedbackCommentsScreen({ tutorId, user, onBack }) {
+  const insets = useSafeAreaInsets();
   const [tutor, setTutor] = useState(null);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -116,7 +115,9 @@ export default function FeedbackCommentsScreen({ tutorId, user, onBack }) {
     return () => controller.abort();
   }, [tutorId, attempt]);
 
-  return <View style={feedbackStyles.screen}>
+  // Wrap the header too, so the only offset is the parent's top safe area.
+  return <KeyboardAvoidingView style={feedbackStyles.screen} behavior={Platform.OS === 'web' ? undefined : 'padding'}
+    keyboardVerticalOffset={insets.top}>
     <View style={feedbackStyles.header}>
       <TouchableOpacity style={[feedbackStyles.headerButton, styles.headerBack]} onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to tutors">
         <Feather name="arrow-left" size={23} color="#FFFFFF" />
@@ -131,17 +132,17 @@ export default function FeedbackCommentsScreen({ tutorId, user, onBack }) {
         </TouchableOpacity>
       </> : <><ActivityIndicator color="#6500FF" /><Text style={feedbackStyles.stateText}>Loading tutor...</Text></>}
     </View>}
-  </View>;
+  </KeyboardAvoidingView>;
 }
 
 const styles = StyleSheet.create({
   body: { flex: 1 },
   headerBack: { borderRadius: 14, backgroundColor: 'rgba(255, 255, 255, 0.12)', marginRight: 4 },
-  listContent: { padding: 18, paddingBottom: 24, width: '100%', maxWidth: 640, alignSelf: 'center' },
+  listContent: { padding: 16, paddingBottom: 24, width: '100%', maxWidth: 640, alignSelf: 'center' },
   commentsHeading: { marginTop: 22, marginBottom: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2 },
   commentsTitle: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   commentCount: { fontSize: 11, fontWeight: '700', color: '#7C3AED', backgroundColor: '#EDE4FA', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   refreshButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#EEE7F9', alignItems: 'center', justifyContent: 'center' },
-  thread: { borderWidth: 1, borderColor: '#EDE6F6', borderRadius: 22, padding: 16, marginBottom: 14, backgroundColor: '#FFFFFF', boxShadow: '0px 4px 16px rgba(50, 28, 82, 0.05)' },
+  thread: { borderWidth: 1, borderColor: '#EDE6F6', borderRadius: 20, padding: 14, marginBottom: 14, backgroundColor: '#FFFFFF', boxShadow: '0px 4px 16px rgba(50, 28, 82, 0.05)' },
   empty: { padding: 28, gap: 12, alignItems: 'center', borderWidth: 1, borderRadius: 18, borderColor: '#EEEAF5', backgroundColor: '#FFFFFF' },
 });
